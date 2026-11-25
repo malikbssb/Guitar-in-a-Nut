@@ -1,0 +1,4 @@
+---
+kind: wasmer.io/App.v0
+name: guitar-in-a-nut
+package: malikbssb/guitar-in-a-nut
