@@ -1,10 +1,7 @@
 [package]
 name = "malikbssb/guitar-in-a-nut"
-version = "0.1.0"
+version = "0.2.0"
 description = "Guitar in a Nut: tuner, chords, neck, ear training, metronome and drum machine"
 
 [dependencies]
-"wasmer/static-web-server" = "^1"
-
-[fs]
-public = "public"
+"wasmer/static-web-server" = "^2"
