@@ -433,6 +433,15 @@ const _fr = <String, String>{
   'Play': 'Lancer',
   'Four cells to a beat, sixteen to a bar.':
       'Quatre cases par temps, seize par mesure.',
+  'Bars': 'Mesures',
+  'Bar': 'Mesure',
+  'Add bar': 'Ajouter une mesure',
+  'Copy bar': 'Dupliquer la mesure',
+  'Delete bar': 'Supprimer la mesure',
+  'Play runs the bars in order, then loops back. A preset or Clear only '
+          'touches the bar being written.':
+      'La lecture enchaîne les mesures dans l\'ordre, puis revient au début. '
+      'Un modèle ou Vider ne touche que la mesure en cours d\'écriture.',
   'Rock beat': 'Battement rock',
   'Four on the floor': 'Quatre temps au sol',
   'Funk': 'Funk',

@@ -1782,6 +1782,48 @@ void main() {
       return lit;
     }
 
+    Finder barCard(int index) =>
+        inScreen(DrumMachineScreen, find.byKey(Key('bar-card-$index')));
+
+    /// The card whose bar the playhead has reached wears a heavier border.
+    bool barIsSounding(WidgetTester tester, int index) {
+      final box =
+          tester
+                  .widget<AnimatedContainer>(
+                    find.descendant(
+                      of: barCard(index),
+                      matching: find.byType(AnimatedContainer),
+                    ),
+                  )
+                  .decoration
+              as BoxDecoration;
+      return box.border!.top.width > 1.5;
+    }
+
+    /// How many of a bar's sixteen steps hold at least one drum, read off the
+    /// little map on its card.
+    int barSteps(WidgetTester tester, int index) {
+      final blank = Theme.of(tester.element(find.byType(DrumMachineScreen)))
+          .colorScheme
+          .onSurface
+          .withValues(alpha: 0.08);
+      var lit = 0;
+      for (var step = 0; step < drumSteps; step++) {
+        final box =
+            tester
+                    .widget<Container>(
+                      inScreen(
+                        DrumMachineScreen,
+                        find.byKey(Key('bar-$index-$step')),
+                      ),
+                    )
+                    .decoration
+                as BoxDecoration;
+        if (box.color != blank) lit++;
+      }
+      return lit;
+    }
+
     testWidgets('the rail opens a grid of every sample', (tester) async {
       await openSection(tester, 'DRUM MACHINE');
       final dim = Theme.of(tester.element(find.byType(DrumMachineScreen)))
@@ -1903,6 +1945,131 @@ void main() {
       // Stopping parks the playhead but leaves the written pattern alone.
       expect(litCells(tester, scheme.primary), 8);
       expect(cellColor(tester, ClickVoice.tom, 1), dim.withValues(alpha: 0.45));
+    });
+
+    testWidgets('a new bar is empty and only it changes', (tester) async {
+      await openSection(tester, 'DRUM MACHINE');
+      final scheme = Theme.of(tester.element(find.byType(DrumMachineScreen)))
+          .colorScheme;
+
+      // The page ships with the one bar the rock beat fills.
+      expect(barCard(0), findsOneWidget);
+      expect(barCard(1), findsNothing);
+      expect(barSteps(tester, 0), 5);
+
+      await tester.tap(inScreen(DrumMachineScreen, find.text('Add bar')));
+      await tester.pumpAndSettle();
+
+      expect(barCard(1), findsOneWidget);
+      // The new bar is the one being written, so the grid under it is empty
+      // while the first card keeps its five steps of rock beat.
+      expect(litCells(tester, scheme.primary), 0);
+      expect(barSteps(tester, 1), 0);
+      expect(barSteps(tester, 0), 5);
+
+      await tester.tap(cell(ClickVoice.tom, 3));
+      await tester.pumpAndSettle();
+
+      expect(barSteps(tester, 1), 1);
+      expect(barSteps(tester, 0), 5);
+      expect(litCells(tester, scheme.primary), 1);
+    });
+
+    testWidgets('Copy bar repeats the written one and the cards switch', (
+      tester,
+    ) async {
+      await openSection(tester, 'DRUM MACHINE');
+      final scheme = Theme.of(tester.element(find.byType(DrumMachineScreen)))
+          .colorScheme;
+
+      await tester.tap(inScreen(DrumMachineScreen, find.text('Copy bar')));
+      await tester.pumpAndSettle();
+
+      // The copy lands selected, so the grid still holds the eight rock cells.
+      expect(barSteps(tester, 1), 5);
+      expect(litCells(tester, scheme.primary), 8);
+
+      // Editing the copy does not reach back into the bar it came from.
+      await tester.tap(cell(ClickVoice.tom, 3));
+      await tester.pumpAndSettle();
+
+      expect(barSteps(tester, 1), 6);
+      expect(barSteps(tester, 0), 5);
+
+      await tester.tap(barCard(0));
+      await tester.pumpAndSettle();
+
+      expect(litCells(tester, scheme.primary), 8);
+      expect(cellColor(tester, ClickVoice.tom, 3), isNot(scheme.primary));
+    });
+
+    testWidgets('the last bar cannot be deleted, and the other survives', (
+      tester,
+    ) async {
+      await openSection(tester, 'DRUM MACHINE');
+      final scheme = Theme.of(tester.element(find.byType(DrumMachineScreen)))
+          .colorScheme;
+
+      // One bar is the whole song, so there is nothing to throw away yet.
+      expect(
+        inScreen(DrumMachineScreen, find.text('Delete bar')),
+        findsNothing,
+      );
+
+      await tester.tap(inScreen(DrumMachineScreen, find.text('Add bar')));
+      await tester.pumpAndSettle();
+      await tester.tap(inScreen(DrumMachineScreen, find.text('Delete bar')));
+      await tester.pumpAndSettle();
+
+      expect(barCard(1), findsNothing);
+      expect(
+        inScreen(DrumMachineScreen, find.text('Delete bar')),
+        findsNothing,
+      );
+      // Back on the first bar, which the detour left untouched.
+      expect(litCells(tester, scheme.primary), 8);
+    });
+
+    testWidgets('play runs one bar and then the next', (tester) async {
+      await openSection(tester, 'DRUM MACHINE');
+      final scheme = Theme.of(tester.element(find.byType(DrumMachineScreen)))
+          .colorScheme;
+      final dim = scheme.surfaceContainerHighest;
+
+      /// Whether the grid is showing the bar the playhead is inside.
+      bool playheadInGrid(WidgetTester tester) => List.generate(
+        drumSteps,
+        (step) => cellColor(tester, ClickVoice.tom, step),
+      ).contains(scheme.primary.withValues(alpha: 0.22));
+
+      await tester.tap(inScreen(DrumMachineScreen, find.text('Add bar')));
+      await tester.pumpAndSettle();
+
+      // The grid is showing bar 2, the empty one, while bar 1 plays.
+      await tester.tap(inScreen(DrumMachineScreen, find.byTooltip('Slower')));
+      await tester.pumpAndSettle();
+      await tester.tap(inScreen(DrumMachineScreen, find.text('Play')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(barIsSounding(tester, 0), isTrue);
+      expect(barIsSounding(tester, 1), isFalse);
+      expect(playheadInGrid(tester), isFalse);
+      expect(cellColor(tester, ClickVoice.tom, 0), dim);
+
+      // A bar of steps at 95 BPM is about two and a half seconds, so the
+      // playhead has moved on to the bar the grid is showing.
+      await tester.pump(const Duration(milliseconds: 2700));
+
+      expect(barIsSounding(tester, 0), isFalse);
+      expect(barIsSounding(tester, 1), isTrue);
+      expect(playheadInGrid(tester), isTrue);
+
+      await tester.tap(inScreen(DrumMachineScreen, find.text('Stop')));
+      await tester.pumpAndSettle();
+
+      expect(barIsSounding(tester, 0), isFalse);
+      expect(barIsSounding(tester, 1), isFalse);
     });
 
     testWidgets('a phone gets the steps in a sideways scroll', (tester) async {

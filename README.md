@@ -16,7 +16,7 @@ School project — no account, no install, and nothing leaves your browser excep
 | **Quiz** | Pick a level and a length: the round is drawn fresh from the questions that level allows, and Expert types the answer instead of picking one. |
 | **Ear training** | No note names on screen — listen, guess, then read why you were right or wrong. Four modes, the same four levels, and a round of 5 to 20 sounds. |
 | **Metronome** | Set the tempo, count the bar, choose the click sound: kick, tom, snare, cymbal, bell, clap, cowbell and the three hi-hats are real recordings — the drum set cuts, the two cymbals left to ring — and the stick stays synthesised. Beat one can be stressed, louder and a touch higher, or switched off for an even tick. The beats are booked on the browser's audio clock, so a lagging frame cannot push the click off the beat. |
-| **Drum machine** | The same eleven voices as lanes on a grid of sixteen steps — one bar of sixteenth notes. Tap the cells to write a pattern, press Play and it loops on the audio clock while you keep editing it. Three starter patterns, and the page opens with the rock beat already written. |
+| **Drum machine** | The same eleven voices as lanes on a grid of sixteen steps — one bar of sixteenth notes. Tap the cells to write a pattern, press Play and it loops on the audio clock while you keep editing it. Add a bar to write a second one, copy or delete what you have, and Play runs the bars in order: the cards above the grid show where each bar's hits fall and which one is sounding. Three starter patterns, and the page opens with the rock beat already written. |
 | **From scratch** | The plan a total beginner follows: four things, in order, each with the page that teaches it. It sits on top of LEARN as a banner rather than as another menu entry. |
 | **Theory** | Optional intro page for visitors who want the fundamentals first. |
 
@@ -112,7 +112,7 @@ lib/
   app_shell.dart         header, navigation rail, section switching
   audio/                 plucked-string audio, the metronome and drum-machine Web Audio clocks (web + stub)
   chords/                chord list screen
-  drum/                  the step-sequencer grid and its three starter patterns
+  drum/                  the step-sequencer grid, the bars of a song and its three starter patterns
   l10n/                  English and French strings
   learn/                 beginner lessons
   metronome/             the click screen: tempo, bar length, voice chips

@@ -10,7 +10,7 @@ import 'click_voice.dart';
 /// pattern callback is accepted and then left alone.
 Timer? _timer;
 int _step = 0;
-int _steps = 16;
+int Function() _stepCount = () => 16;
 double _bpm = 90;
 void Function(int step)? _onStep;
 
@@ -18,13 +18,13 @@ Duration get _spacing => Duration(microseconds: (60e6 / _bpm / 4).round());
 
 Future<void> startDrumLoop({
   required double bpm,
-  required int steps,
+  required int Function() stepCount,
   required List<ClickVoice> Function(int step) voicesAt,
   required void Function(int step) onStep,
 }) async {
   stopDrumLoop();
   _bpm = bpm;
-  _steps = steps;
+  _stepCount = stepCount;
   _onStep = onStep;
   _step = 0;
   _tick();
@@ -32,8 +32,10 @@ Future<void> startDrumLoop({
 }
 
 void _tick() {
+  final steps = _stepCount();
+  if (_step >= steps) _step = 0;
   _onStep?.call(_step);
-  _step = (_step + 1) % _steps;
+  _step = (_step + 1) % steps;
 }
 
 void stopDrumLoop() {

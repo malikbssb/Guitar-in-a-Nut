@@ -30,6 +30,53 @@ class DrumPattern {
   bool isOn(ClickVoice lane, int step) => hits[lane]?.contains(step) ?? false;
 }
 
+/// A bar in the shape the drum machine edits it, where a [DrumPattern] is a
+/// bar someone else wrote. The presets are const, so their hit sets cannot be
+/// tapped on; copying one into a `DrumBar` gives the screen sets it may change.
+class DrumBar {
+  final Map<ClickVoice, Set<int>> hits;
+
+  DrumBar(Map<ClickVoice, Set<int>> hits)
+    : hits = {
+        for (final lane in drumLanes) lane: {...hits[lane] ?? const <int>{}},
+      };
+
+  factory DrumBar.from(DrumPattern pattern) => DrumBar(pattern.hits);
+
+  /// The step indices sound on the beat, so a bar can be judged by where its
+  /// hits fall without counting them lane by lane.
+  List<ClickVoice> voicesOn(int step) => [
+    for (final lane in drumLanes)
+      if (hits[lane]!.contains(step)) lane,
+  ];
+
+  /// How many lanes speak on a step, which is how bright its cell in the
+  /// overview map gets.
+  int soundsOn(int step) =>
+      hits.values.where((lane) => lane.contains(step)).length;
+
+  int get litCells => hits.values.fold(0, (sum, lane) => sum + lane.length);
+
+  bool get empty => litCells == 0;
+
+  void toggle(ClickVoice lane, int step) {
+    final hits = this.hits[lane]!;
+    if (hits.contains(step)) {
+      hits.remove(step);
+    } else {
+      hits.add(step);
+    }
+  }
+
+  void clear() {
+    for (final lane in drumLanes) {
+      hits[lane]!.clear();
+    }
+  }
+
+  DrumBar copied() => DrumBar(hits);
+}
+
 const List<DrumPattern> drumPresets = [
   DrumPattern('Rock beat', {
     ClickVoice.kick: {0, 10},

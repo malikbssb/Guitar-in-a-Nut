@@ -37,7 +37,7 @@ const Map<ClickVoice, double> _laneGain = {
 
 Future<void> startDrumLoop({
   required double bpm,
-  required int steps,
+  required int Function() stepCount,
   required List<ClickVoice> Function(int step) voicesAt,
   required void Function(int step) onStep,
 }) async {
@@ -52,7 +52,7 @@ Future<void> startDrumLoop({
   _loop = _DrumLoop(
     context: context,
     bpm: bpm,
-    steps: steps,
+    stepCount: stepCount,
     voicesAt: voicesAt,
     onStep: onStep,
   )..start();
@@ -68,7 +68,10 @@ void setDrumTempo(double bpm) => _loop?.bpm = bpm;
 
 class _DrumLoop {
   final web.AudioContext context;
-  final int steps;
+
+  /// Asked again at every booking, so a bar added while the loop runs joins
+  /// the sequence on the next pass instead of needing a restart.
+  final int Function() stepCount;
   final List<ClickVoice> Function(int step) voicesAt;
   final void Function(int step) onStep;
 
@@ -84,7 +87,7 @@ class _DrumLoop {
   _DrumLoop({
     required this.context,
     required this.bpm,
-    required this.steps,
+    required this.stepCount,
     required this.voicesAt,
     required this.onStep,
   });
@@ -103,7 +106,7 @@ class _DrumLoop {
     _lights.removeWhere((light) => !light.isActive);
     final horizon = context.currentTime + _lookahead;
     while (_nextTime < horizon) {
-      _schedule(_nextTime, _booked.remainder(steps));
+      _schedule(_nextTime, _booked.remainder(stepCount()));
       _booked++;
       _nextTime += _spacing;
     }

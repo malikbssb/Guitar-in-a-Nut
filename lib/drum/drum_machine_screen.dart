@@ -5,9 +5,9 @@ import '../audio/drum_engine.dart';
 import '../l10n/strings.dart';
 import 'drum_patterns.dart';
 
-/// The drum machine: a bar of sixteenth notes drawn as a grid, one lane per
-/// sample the metronome already ships. Tapping a cell puts a drum on that
-/// step, and the loop keeps running while you do it.
+/// The drum machine: bars of sixteenth notes, one lane per sample the
+/// metronome already ships. Tapping a cell puts a drum on that step, the grid
+/// shows the bar being written, and Play runs every bar in order on a loop.
 class DrumMachineScreen extends StatefulWidget {
   const DrumMachineScreen({super.key});
 
@@ -21,15 +21,21 @@ class _DrumMachineScreenState extends State<DrumMachineScreen> {
 
   int _bpm = 100;
   bool _playing = false;
-  int _current = -1;
 
-  /// Which steps each lane sounds on. The engine reads this while it books,
-  /// so an edit lands on the next pass of the loop. The rock beat comes in
-  /// with the page, so the first tap of Play is not silence.
-  final Map<ClickVoice, Set<int>> _hits = {
-    for (final lane in drumLanes)
-      lane: {...drumPresets.first.hits[lane] ?? const <int>{}},
-  };
+  /// The song, in the order Play runs it. The rock beat opens it, so the first
+  /// tap of Play is not silence.
+  final List<DrumBar> _bars = [DrumBar.from(drumPresets.first)];
+
+  /// Which bar the grid is showing and tapping edits.
+  int _writing = 0;
+
+  /// The playhead as an index into the whole song, so the strip and the grid
+  /// can both light from one number. Minus one once stopped.
+  int _cursor = -1;
+
+  int get _sounding => _cursor < 0 ? -1 : _cursor ~/ drumSteps;
+
+  int get _stepInBar => _cursor < 0 ? -1 : _cursor % drumSteps;
 
   @override
   void dispose() {
@@ -37,19 +43,22 @@ class _DrumMachineScreenState extends State<DrumMachineScreen> {
     super.dispose();
   }
 
-  List<ClickVoice> _voicesAt(int step) => [
-    for (final lane in drumLanes)
-      if (_hits[lane]!.contains(step)) lane,
-  ];
+  /// The engine hands over a step of the song, not of a bar, and asks again
+  /// for each booking, so the bars may grow and shrink while it runs.
+  List<ClickVoice> _voicesAt(int step) {
+    final bar = step ~/ drumSteps;
+    if (bar >= _bars.length) return const [];
+    return _bars[bar].voicesOn(step % drumSteps);
+  }
 
   void _start() {
     setState(() => _playing = true);
     startDrumLoop(
       bpm: _bpm.toDouble(),
-      steps: drumSteps,
+      stepCount: () => _bars.length * drumSteps,
       voicesAt: _voicesAt,
       onStep: (step) {
-        if (mounted) setState(() => _current = step);
+        if (mounted) setState(() => _cursor = step);
       },
     );
   }
@@ -58,7 +67,7 @@ class _DrumMachineScreenState extends State<DrumMachineScreen> {
     stopDrumLoop();
     setState(() {
       _playing = false;
-      _current = -1;
+      _cursor = -1;
     });
   }
 
@@ -70,31 +79,34 @@ class _DrumMachineScreenState extends State<DrumMachineScreen> {
   }
 
   void _toggle(ClickVoice lane, int step) {
-    setState(() {
-      final hits = _hits[lane]!;
-      if (hits.contains(step)) {
-        hits.remove(step);
-      } else {
-        hits.add(step);
-      }
-    });
+    setState(() => _bars[_writing].toggle(lane, step));
   }
 
   void _load(DrumPattern pattern) {
-    setState(() {
-      for (final lane in drumLanes) {
-        _hits[lane]!
-          ..clear()
-          ..addAll(pattern.hits[lane] ?? const <int>{});
-      }
-    });
+    setState(() => _bars[_writing] = DrumBar.from(pattern));
   }
 
   void _clear() {
+    setState(() => _bars[_writing].clear());
+  }
+
+  /// A fresh bar lands after the one being written, not at the end of the
+  /// song, so bars can be inserted into the middle of a running order.
+  void _addBar({DrumBar? copy}) {
     setState(() {
-      for (final lane in drumLanes) {
-        _hits[lane]!.clear();
-      }
+      _bars.insert(_writing + 1, copy ?? DrumBar({}));
+      _writing += 1;
+    });
+  }
+
+  void _deleteBar() {
+    if (_bars.length == 1) return;
+    setState(() {
+      _bars.removeAt(_writing);
+      if (_writing >= _bars.length) _writing = _bars.length - 1;
+      // The song is shorter than the pass the engine booked, so the playhead
+      // is parked until the next one arrives.
+      _cursor = -1;
     });
   }
 
@@ -180,6 +192,61 @@ class _DrumMachineScreenState extends State<DrumMachineScreen> {
             ),
           ),
           const SizedBox(height: 22),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  L.t(context, 'Bars'),
+                  style: theme.textTheme.titleSmall,
+                ),
+              ),
+              Text('${_bars.length}', style: theme.textTheme.titleSmall),
+            ],
+          ),
+          const SizedBox(height: 6),
+          _BarStrip(
+            bars: _bars,
+            writing: _writing,
+            sounding: _sounding,
+            stepInBar: _stepInBar,
+            onSelect: (index) => setState(() => _writing = index),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              ActionChip(
+                key: const Key('add-bar'),
+                avatar: const Icon(Icons.add),
+                label: Text(L.t(context, 'Add bar')),
+                onPressed: () => _addBar(),
+              ),
+              ActionChip(
+                key: const Key('copy-bar'),
+                avatar: const Icon(Icons.copy_all_outlined),
+                label: Text(L.t(context, 'Copy bar')),
+                onPressed: () => _addBar(copy: _bars[_writing].copied()),
+              ),
+              if (_bars.length > 1)
+                ActionChip(
+                  key: const Key('delete-bar'),
+                  avatar: const Icon(Icons.delete_outline),
+                  label: Text(L.t(context, 'Delete bar')),
+                  onPressed: _deleteBar,
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            L.t(
+              context,
+              'Play runs the bars in order, then loops back. A preset or Clear '
+              'only touches the bar being written.',
+            ),
+            style: theme.textTheme.bodySmall,
+          ),
+          const SizedBox(height: 18),
           Text(L.t(context, 'Start from'), style: theme.textTheme.titleSmall),
           const SizedBox(height: 6),
           Wrap(
@@ -195,13 +262,162 @@ class _DrumMachineScreenState extends State<DrumMachineScreen> {
             ],
           ),
           const SizedBox(height: 18),
-          _Grid(hits: _hits, current: _current, onTapCell: _toggle),
+          _Grid(
+            hits: _bars[_writing].hits,
+            current: _sounding == _writing ? _stepInBar : -1,
+            onTapCell: _toggle,
+          ),
           const SizedBox(height: 10),
           Text(
             L.t(context, 'Four cells to a beat, sixteen to a bar.'),
             style: theme.textTheme.bodySmall,
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// The song as a row of cards: the bar being written is outlined, and the one
+/// the playhead has reached lights up step by step.
+class _BarStrip extends StatelessWidget {
+  static const double _cellWidth = 5;
+  static const double _cellGap = 2;
+
+  final List<DrumBar> bars;
+  final int writing;
+  final int sounding;
+  final int stepInBar;
+  final ValueChanged<int> onSelect;
+
+  const _BarStrip({
+    required this.bars,
+    required this.writing,
+    required this.sounding,
+    required this.stepInBar,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      key: const Key('drum-bars'),
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (var index = 0; index < bars.length; index++)
+            Padding(
+              padding: EdgeInsets.only(right: index + 1 == bars.length ? 0 : 8),
+              child: _BarCard(
+                key: Key('bar-card-$index'),
+                index: index,
+                bar: bars[index],
+                title: '${L.t(context, 'Bar')} ${index + 1}',
+                selected: index == writing,
+                sounding: index == sounding,
+                current: index == sounding ? stepInBar : -1,
+                onTap: () => onSelect(index),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A bar at a glance: the map under the number is one cell per step, and a
+/// cell is as bright as there are drums on that step.
+class _BarCard extends StatelessWidget {
+  static const double _cell = _BarStrip._cellWidth;
+  static const double _gap = _BarStrip._cellGap;
+
+  /// Sixteen cells at five points with a two-point gap between them.
+  static double get _mapWidth => drumSteps * _cell + (drumSteps - 1) * _gap;
+
+  final int index;
+  final DrumBar bar;
+  final String title;
+  final bool selected;
+  final bool sounding;
+  final int current;
+  final VoidCallback onTap;
+
+  const _BarCard({
+    super.key,
+    required this.index,
+    required this.bar,
+    required this.title,
+    required this.selected,
+    required this.sounding,
+    required this.current,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 90),
+        padding: const EdgeInsets.fromLTRB(10, 7, 10, 9),
+        decoration: BoxDecoration(
+          color: selected
+              ? scheme.primary.withValues(alpha: 0.12)
+              : scheme.surfaceContainer,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: sounding
+                ? scheme.onSurface
+                : scheme.primary.withValues(alpha: selected ? 0.8 : 0.18),
+            width: sounding ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            Text(
+              title,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: selected ? scheme.primary : null,
+                fontWeight: selected ? FontWeight.w700 : null,
+              ),
+            ),
+            const SizedBox(height: 5),
+            SizedBox(
+              width: _mapWidth,
+              child: Row(
+                spacing: _gap,
+                children: [
+                  for (var step = 0; step < drumSteps; step++)
+                    Container(
+                      key: Key('bar-$index-$step'),
+                      width: _cell,
+                      height: step % 4 == 0 ? 13 : 9,
+                      decoration: BoxDecoration(
+                        color: bar.soundsOn(step) == 0
+                            ? scheme.onSurface.withValues(alpha: 0.08)
+                            : scheme.primary.withValues(
+                                alpha: switch (bar.soundsOn(step)) {
+                                  1 => 0.45,
+                                  2 => 0.7,
+                                  _ => 1,
+                                },
+                              ),
+                        borderRadius: BorderRadius.circular(2),
+                        // The step the song is on, marked without changing the
+                        // width of the map.
+                        border: step == current
+                            ? Border.all(color: scheme.onSurface, width: 1.5)
+                            : null,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
