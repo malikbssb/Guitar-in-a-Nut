@@ -55,6 +55,33 @@ class SettingsSheet extends StatelessWidget {
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
+            const SizedBox(height: 8),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.warning_amber_rounded,
+                  size: 18,
+                  color: theme.colorScheme.error,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    L.t(
+                      context,
+                      'The French side is a machine pass nobody has proofread. '
+                      'Wordings can be off, so English stays the recommended '
+                      'language.',
+                    ),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: lang == AppLang.fr
+                          ? theme.colorScheme.error
+                          : theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 18),
             Text(L.t(context, 'Theme'), style: theme.textTheme.labelLarge),
             const SizedBox(height: 6),

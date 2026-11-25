@@ -1,26 +1,38 @@
 import 'package:flutter/material.dart';
 
 import '../l10n/strings.dart';
+import 'section_glyph.dart';
 
 /// Sections reachable from the left rail. The tuner itself lives behind the
 /// wooden logo, exactly like the mock-up.
-enum AppSection { chords, neck, learn, quiz, earTraining, metronome }
+enum AppSection {
+  chords,
+  neck,
+  learn,
+  quiz,
+  earTraining,
+  metronome,
+  drumMachine,
+}
 
 class _RailItem {
   final AppSection section;
-  final IconData icon;
+
+  /// Either an [Icon] or one of the drawn glyphs in `section_glyph.dart`.
+  final Widget icon;
   final String label;
 
   const _RailItem(this.section, this.icon, this.label);
 }
 
 const _items = <_RailItem>[
-  _RailItem(AppSection.chords, Icons.grid_view, 'CHORDS / SCALES'),
-  _RailItem(AppSection.neck, Icons.linear_scale, 'NECK'),
-  _RailItem(AppSection.learn, Icons.school_outlined, 'LEARN'),
-  _RailItem(AppSection.quiz, Icons.quiz_outlined, 'QUIZ'),
-  _RailItem(AppSection.earTraining, Icons.hearing, 'EAR TRAINING'),
-  _RailItem(AppSection.metronome, Icons.speed, 'METRONOME'),
+  _RailItem(AppSection.chords, Icon(Icons.grid_view), 'CHORDS / SCALES'),
+  _RailItem(AppSection.neck, NeckGlyph(), 'NECK'),
+  _RailItem(AppSection.learn, Icon(Icons.school_outlined), 'LEARN'),
+  _RailItem(AppSection.quiz, Icon(Icons.quiz_outlined), 'QUIZ'),
+  _RailItem(AppSection.earTraining, Icon(Icons.hearing), 'EAR TRAINING'),
+  _RailItem(AppSection.metronome, MetronomeGlyph(), 'METRONOME'),
+  _RailItem(AppSection.drumMachine, SnareGlyph(), 'DRUM MACHINE'),
 ];
 
 /// Hamburger strip that widens into a labelled menu when tapped.
@@ -116,7 +128,12 @@ class _RailButton extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(item.icon, color: color, size: 22),
+            // The drawn glyphs read their colour and size from here too, so
+            // they sit on the same baseline as the Material icons.
+            IconTheme(
+              data: IconThemeData(color: color, size: 22),
+              child: item.icon,
+            ),
             if (expanded) ...[
               const SizedBox(width: 12),
               Expanded(

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import '../models/chords.dart';
 import '../models/notes.dart';
 import '../models/scales.dart';
+import 'quiz_level.dart';
 
 /// What a question tests, so one round never turns into ten interval questions.
 enum QuizKind {
@@ -39,6 +40,60 @@ class Question {
     required this.kind,
     this.diagram,
   });
+
+  /// Which tier of the site this question belongs to: 0 is the first week,
+  /// 1 is the middle, 2 is the sharp end. Derived from what the question
+  /// actually asks, so a new chord or tuning sorts itself in.
+  int get tier => questionTier(this);
+
+  String get answer => options[answerIndex];
+}
+
+/// The rule behind [Question.tier].
+int questionTier(Question question) {
+  final chord = question.diagram;
+  if (chord != null) return chordTier(chord);
+
+  final answer = question.options[question.answerIndex];
+
+  // Reading a note off a string and a fret. The first five frets are the
+  // beginner's ground; past them the neck starts to cost something.
+  if (question.kind == QuizKind.neck) {
+    final fret = int.tryParse(
+      RegExp(r'at fret (\d+)').firstMatch(question.prompt)?.group(1) ?? '',
+    );
+    return fret == null
+        ? 1
+        : fret <= 5
+        ? 0
+        : 1;
+  }
+
+  // Naming the note above another one is arithmetic, even when the answer is
+  // a bare note name.
+  if (question.kind == QuizKind.intervals) {
+    if (answer == 'half step' || answer == 'whole step') return 0;
+    if (answer.contains('7') || answer.contains('9') || answer.contains('6')) {
+      return 2;
+    }
+    return 1;
+  }
+
+  if (isBasicAnswer(answer)) return 0;
+
+  return switch (question.kind) {
+    QuizKind.shapes || QuizKind.spelling => 1,
+    QuizKind.scales =>
+      answer == 'minor pentatonic' || answer == 'major' ? 1 : 2,
+    QuizKind.tunings =>
+      answer.startsWith('Standard')
+          ? 0
+          : answer.startsWith('Open') || answer.contains('DADGAD')
+          ? 2
+          : 1,
+    QuizKind.keys || QuizKind.rhythm || QuizKind.theory => 2,
+    QuizKind.neck || QuizKind.intervals => 1,
+  };
 }
 
 /// How many questions one round asks, out of a pool of several hundred.
@@ -648,13 +703,29 @@ final List<Question> quizPool = () {
   ];
 }();
 
+/// The questions one level is allowed to ask. Expert also drops anything
+/// whose answer is too long to type.
+List<Question> _poolFor(QuizLevel level) => [
+  for (final question in quizPool)
+    if (question.tier <= level.topTier &&
+        (!level.isTyped || isTypeable(question.options[question.answerIndex])))
+      question,
+];
+
+/// How many questions a level can offer, which caps the round length.
+int quizPoolSizeFor(QuizLevel level) => _poolFor(level).length;
+
 /// A fresh round: questions taken one kind at a time so the mix stays wide,
 /// with the options shuffled again so the right answer never sits in the same
 /// slot twice.
-List<Question> quizRound({int count = quizLength, int? seed}) {
+List<Question> quizRound({
+  int count = quizLength,
+  int? seed,
+  QuizLevel level = QuizLevel.medium,
+}) {
   final random = math.Random(seed);
   final buckets = <QuizKind, List<Question>>{};
-  for (final question in quizPool) {
+  for (final question in _poolFor(level)) {
     (buckets[question.kind] ??= <Question>[]).add(question);
   }
   for (final bucket in buckets.values) {
@@ -663,17 +734,33 @@ List<Question> quizRound({int count = quizLength, int? seed}) {
 
   final kinds = buckets.keys.toList()..shuffle(random);
   final round = <Question>[];
-  var starving = 0;
-  while (round.length < count && starving < kinds.length) {
+  final asked = <String>{};
+  var allowRepeats = false;
+
+  // One question per kind per pass keeps the mix wide. Diagram questions
+  // share their prompt - "Which chord is drawn here?" for thirty shapes - so
+  // a round prefers a prompt it has not used yet and only repeats a wording
+  // once the level has nothing left that is new.
+  while (round.length < count && buckets.values.any((b) => b.isNotEmpty)) {
     var taken = 0;
     for (final kind in kinds) {
-      final bucket = buckets[kind]!;
-      if (bucket.isEmpty) continue;
       if (round.length == count) break;
-      round.add(_freshen(bucket.removeLast(), random));
-      taken++;
+      final bucket = buckets[kind]!;
+      final waiting = <Question>[];
+      while (bucket.isNotEmpty) {
+        final candidate = bucket.removeLast();
+        if (!allowRepeats && asked.contains(candidate.prompt)) {
+          waiting.add(candidate);
+          continue;
+        }
+        asked.add(candidate.prompt);
+        round.add(_freshen(candidate, random));
+        taken++;
+        break;
+      }
+      bucket.addAll(waiting);
     }
-    starving = taken == 0 ? starving + 1 : 0;
+    if (taken == 0) allowRepeats = true;
   }
   return round;
 }

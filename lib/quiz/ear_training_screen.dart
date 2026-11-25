@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import '../l10n/strings.dart';
 import '../widgets/option_button.dart';
 import 'ear_training_data.dart';
+import 'level_picker.dart';
+import 'quiz_level.dart';
+import 'typed_answer.dart';
 
 /// The second quiz: nothing is written down until you have guessed. Pick a
 /// round - open strings, chords, notes on the neck, or everything mixed.
@@ -14,24 +17,45 @@ class EarTrainingScreen extends StatefulWidget {
 }
 
 class _EarTrainingScreenState extends State<EarTrainingScreen> {
+  static const _counts = [5, 10, 15, 20];
+
   bool _started = false;
   EarMode _mode = EarMode.everything;
+  QuizLevel _level = QuizLevel.medium;
+  int _count = 10;
   List<EarQuestion> _questions = const [];
   int _index = 0;
   int _score = 0;
   int? _picked;
 
+  /// Expert rounds: what was typed, and whether it was right.
+  final _typed = TextEditingController();
+  String? _typedReply;
+  bool _typedRight = false;
+
+  @override
+  void dispose() {
+    _typed.dispose();
+    super.dispose();
+  }
+
   bool get _finished => _index >= _questions.length;
-  bool get _answered => _picked != null;
+  bool get _isTyped => _level.isTyped;
+  bool get _answered => _isTyped ? _typedReply != null : _picked != null;
+
+  bool get _isRight =>
+      _isTyped ? _typedRight : _picked == _questions[_index].answerIndex;
 
   void _start(EarMode mode) {
     setState(() {
       _mode = mode;
-      _questions = earQuestionsFor(mode);
+      _questions = earQuestionsFor(mode, count: _count, level: _level);
       _started = true;
       _index = 0;
       _score = 0;
       _picked = null;
+      _typedReply = null;
+      _typed.clear();
     });
     _playCurrent();
   }
@@ -48,8 +72,22 @@ class _EarTrainingScreenState extends State<EarTrainingScreen> {
     setState(() {
       _index++;
       _picked = null;
+      _typedReply = null;
+      _typed.clear();
     });
-    _playCurrent();
+    // Past the last sound the score page takes over and nothing plays.
+    if (!_finished) _playCurrent();
+  }
+
+  /// An empty box is not an answer, so the round waits for a real attempt.
+  void _checkTyped() {
+    if (_answered || _typed.text.trim().isEmpty) return;
+    final correct = typedAnswerMatches(_typed.text, _questions[_index].answer);
+    setState(() {
+      _typedReply = _typed.text;
+      _typedRight = correct;
+      if (correct) _score++;
+    });
   }
 
   @override
@@ -90,8 +128,38 @@ class _EarTrainingScreenState extends State<EarTrainingScreen> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 22),
+                  LevelPicker(
+                    level: _level,
+                    onChanged: (one) => setState(() => _level = one),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    L.t(context, 'How many sounds?'),
+                    style: theme.textTheme.labelLarge,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.center,
+                    children: [
+                      for (final one in _counts)
+                        ChoiceChip(
+                          label: Text('$one'),
+                          selected: _count == one,
+                          onSelected: (_) => setState(() => _count = one),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 22),
                   for (final mode in EarMode.values) ...[
-                    _ModeButton(mode: mode, onTap: () => _start(mode)),
+                    _ModeButton(
+                      mode: mode,
+                      level: _level,
+                      count: _count,
+                      onTap: () => _start(mode),
+                    ),
                     const SizedBox(height: 10),
                   ],
                 ],
@@ -126,7 +194,7 @@ class _EarTrainingScreenState extends State<EarTrainingScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  L.t(context, _mode.label),
+                  '${L.t(context, _mode.label)} - ${L.t(context, _level.label)}',
                   style: theme.textTheme.titleSmall,
                 ),
                 const SizedBox(height: 8),
@@ -179,7 +247,8 @@ class _EarTrainingScreenState extends State<EarTrainingScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            '${L.t(context, _mode.label)} - ${L.t(context, question.kind)}',
+            '${L.t(context, _mode.label)} - '
+            '${L.t(context, _level.label)} - ${L.t(context, question.kind)}',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -197,20 +266,27 @@ class _EarTrainingScreenState extends State<EarTrainingScreen> {
           const SizedBox(height: 18),
           Text(question.prompt, style: theme.textTheme.titleLarge),
           const SizedBox(height: 16),
-          for (var i = 0; i < question.options.length; i++)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: OptionButton(
-                text: question.options[i],
-                isAnswer: i == question.answerIndex,
-                isPicked: i == _picked,
-                revealed: _answered,
-                onTap: () => setState(() {
-                  if (_picked == null && i == question.answerIndex) _score++;
-                  _picked = i;
-                }),
+          if (_isTyped)
+            TypedAnswerField(
+              controller: _typed,
+              canType: !_answered,
+              onSubmit: _checkTyped,
+            )
+          else
+            for (var i = 0; i < question.options.length; i++)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: OptionButton(
+                  text: question.options[i],
+                  isAnswer: i == question.answerIndex,
+                  isPicked: i == _picked,
+                  revealed: _answered,
+                  onTap: () => setState(() {
+                    if (_picked == null && i == question.answerIndex) _score++;
+                    _picked = i;
+                  }),
+                ),
               ),
-            ),
           if (_answered) ...[
             Card(
               color: theme.colorScheme.surfaceContainerHighest,
@@ -220,7 +296,7 @@ class _EarTrainingScreenState extends State<EarTrainingScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _picked == question.answerIndex
+                      _isRight
                           ? L.t(context, 'Correct')
                           : L.f(context, 'Answer: {a}', {
                               'a': question.options[question.answerIndex],
@@ -228,6 +304,12 @@ class _EarTrainingScreenState extends State<EarTrainingScreen> {
                       style: theme.textTheme.titleSmall,
                     ),
                     const SizedBox(height: 4),
+                    if (_typedReply != null && !_isRight)
+                      Text(
+                        L.f(context, 'You wrote {a}', {
+                          'a': '“${_typedReply!.trim()}”',
+                        }),
+                      ),
                     Text(question.explanation),
                   ],
                 ),
@@ -255,9 +337,16 @@ class _EarTrainingScreenState extends State<EarTrainingScreen> {
 /// One round of the ear trainer, labelled with what it actually listens to.
 class _ModeButton extends StatelessWidget {
   final EarMode mode;
+  final QuizLevel level;
+  final int count;
   final VoidCallback onTap;
 
-  const _ModeButton({required this.mode, required this.onTap});
+  const _ModeButton({
+    required this.mode,
+    required this.level,
+    required this.count,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -295,14 +384,20 @@ class _ModeButton extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            earPoolSize(mode) > earRoundLength(mode)
-                ? L.f(context, '{n} sounds, drawn fresh from {m}', {
-                    'n': '${earRoundLength(mode)}',
-                    'm': '${earPoolSize(mode)}',
-                  })
-                : L.f(context, '{n} sounds, in a random order', {
-                    'n': '${earRoundLength(mode)}',
-                  }),
+            () {
+              final pool = earPoolSize(mode, level: level);
+              if (pool == 0) return L.t(context, 'Nothing at this level');
+              if (pool > count) {
+                return L.f(context, '{n} sounds, drawn fresh from {m}', {
+                  'n': '$count',
+                  'm': '$pool',
+                });
+              }
+              return L.f(context, '{n} sounds from {m}, so they come back', {
+                'n': '$count',
+                'm': '$pool',
+              });
+            }(),
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.tertiary,
             ),

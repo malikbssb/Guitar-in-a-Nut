@@ -4,7 +4,6 @@ import 'dart:typed_data';
 import 'package:web/web.dart' as web;
 
 import '../models/notes.dart';
-import 'click_voice.dart';
 import 'pluck_clip.dart';
 
 /// Synthesised guitar sound for the browser.
@@ -25,12 +24,6 @@ void playStrumPattern(List<int> midis, List<double> onsets) =>
 void playMetronome(double bpm, {int beats = 4, int bars = 1}) =>
     _play(PluckClip.metronome(bpm, beats: beats, bars: bars));
 
-/// One beat, so the metronome page can schedule them as they come due. The
-/// click is kept quieter than a strum: it repeats, and a full-scale tick
-/// every half second tires the ear fast.
-void playClick(ClickVoice voice, {bool accent = false}) =>
-    _play(PluckClip.click(voice, accent: accent), volume: 0.6);
-
 void playTimeline(List<double> lengths, {double bpm = 84}) =>
     _play(PluckClip.timeline(lengths, bpm: bpm));
 
@@ -43,8 +36,10 @@ List<double> _hzAll(List<int> midis) => [for (final midi in midis) _hz(midi)];
 final _live = <web.HTMLAudioElement>[];
 const int _maxLive = 6;
 
-void _play(Float32List samples, {double volume = 0.85}) {
-  final wav = encodeWavMono(samples);
+void _play(Float32List samples, {double volume = 0.85}) =>
+    _playBytes(encodeWavMono(samples), volume: volume);
+
+void _playBytes(Uint8List wav, {required double volume}) {
   final audio = web.HTMLAudioElement()
     ..volume = volume
     ..src = 'data:audio/wav;base64,${base64Encode(wav)}';

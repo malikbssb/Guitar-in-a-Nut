@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'chords/chords_screen.dart';
+import 'drum/drum_machine_screen.dart';
 import 'l10n/strings.dart';
 import 'learn/learn_screen.dart';
 import 'metronome/metronome_screen.dart';
@@ -78,7 +79,7 @@ class _AppShellState extends State<AppShell> {
     ),
     AppSection.quiz => L.f(
       context,
-      'Ten questions drawn from a pool of {n}. New draw every round.',
+      'Questions drawn from a pool of {n}. Pick the level and the length.',
       {'n': '${quizPool.length}'},
     ),
     AppSection.earTraining => L.t(
@@ -88,6 +89,10 @@ class _AppShellState extends State<AppShell> {
     AppSection.metronome => L.t(
       context,
       'Set the speed, count the bar, pick the click.',
+    ),
+    AppSection.drumMachine => L.t(
+      context,
+      'Build a bar of drums, one step at a time.',
     ),
   };
 
@@ -232,10 +237,15 @@ class _AppShellState extends State<AppShell> {
                                 onOpenChords: () => _go(AppSection.chords),
                                 onOpenNeck: () => _go(AppSection.neck),
                                 onOpenQuiz: () => _go(AppSection.quiz),
+                                onOpenEarTraining: () =>
+                                    _go(AppSection.earTraining),
+                                onOpenMetronome: () =>
+                                    _go(AppSection.metronome),
                               ),
                               const QuizScreen(),
                               const EarTrainingScreen(),
                               const MetronomeScreen(),
+                              const DrumMachineScreen(),
                             ],
                           ),
                         ),

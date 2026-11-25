@@ -4,6 +4,7 @@ import '../audio/string_audio.dart';
 import '../models/chords.dart';
 import '../models/notes.dart';
 import '../models/scales.dart';
+import '../roadmap/roadmap_screen.dart';
 import '../theory/theory_screen.dart';
 
 /// One "hear it" control inside a lesson.
@@ -24,6 +25,13 @@ class Prose extends LessonBlock {
   final String text;
 
   const Prose(this.text);
+}
+
+/// A title inside one lesson, used where a page covers more than one idea.
+class SubHeading extends LessonBlock {
+  final String text;
+
+  const SubHeading(this.text);
 }
 
 class Points extends LessonBlock {
@@ -105,6 +113,10 @@ ChordShape _chord(String name) =>
 List<int> _sixStringChord(Tuning tuning) =>
     _chord('G').soundingMidis(tuning.openMidis);
 
+/// Where the from-scratch plan sits inside [learnLessons], for anything that
+/// has to open a lesson by number rather than by tapping the card.
+const int roadmapLessonIndex = 8;
+
 /// Everything the LEARN tab offers, in the order a beginner should meet it.
 List<Lesson> learnLessons({
   required Tuning tuning,
@@ -112,6 +124,9 @@ List<Lesson> learnLessons({
   required VoidCallback onOpenChords,
   required VoidCallback onOpenNeck,
   required VoidCallback onOpenQuiz,
+  required VoidCallback onOpenEarTraining,
+  required VoidCallback onOpenMetronome,
+  required ValueChanged<int> onOpenLesson,
 }) {
   final open = tuning.openMidis;
   final lowRoot = open.first + octave;
@@ -133,7 +148,9 @@ List<Lesson> learnLessons({
     ),
     Lesson.reading(
       title: 'What is a chord?',
-      blurb: 'Several strings, one shape, one name.',
+      blurb:
+          'The shape, the notes, and the two ways to play it: strummed or '
+          'one note at a time.',
       icon: Icons.grid_view,
       blocks: [
         Prose(
@@ -174,7 +191,84 @@ List<Lesson> learnLessons({
             () => playRun(c.soundingMidis(open)),
           ),
         ]),
+        const SubHeading('Arpeggios: the same chord, opened up'),
+        Prose(
+          'Strummed, the notes of a chord hit at almost the same instant. '
+          'Played one at a time they form an arpeggio, and suddenly the same '
+          'chord sounds like a melody.',
+        ),
+        const Points([
+          'Fingerstyle: thumb takes the bass, other fingers take the words.',
+          'Travis picking alternates a bass note on 1 and 3 with the middle '
+              'strings on 2 and 4.',
+          'Any chord can be picked slowly to find out what it is made of.',
+        ]),
+        Hear([
+          SoundAction(
+            'Hear C strummed',
+            () => playChord(c.soundingMidis(open)),
+          ),
+          SoundAction(
+            'Hear C as an arpeggio',
+            () => playRun(c.soundingMidis(open)),
+          ),
+          SoundAction(
+            'Hear a bass-and-strings pattern',
+            () => playRun(const [40, 59, 55, 52, 45, 59, 52, 55]),
+          ),
+        ]),
+        const SubHeading('Strumming patterns'),
+        Prose(
+          'A pattern says which strokes land on which count. Down-strokes '
+          'usually take the beats, up-strokes the "and" between them. Leave '
+          'a stroke out and keep the hand moving: the missing strums are what '
+          'make a groove breathe.',
+        ),
+        const FactTable(
+          columns: ['Count', '1', 'and', '2', 'and', '3', 'and', '4', 'and'],
+          rows: [
+            ['All down', 'D', '-', 'D', '-', 'D', '-', 'D', '-'],
+            ['Steady eighths', 'D', 'U', 'D', 'U', 'D', 'U', 'D', 'U'],
+            ['The classic', 'D', '-', 'D', 'U', '-', 'U', 'D', 'U'],
+            ['Folk swing', 'D', '-', 'U', 'U', 'D', '-', 'U', ''],
+          ],
+        ),
+        Prose(
+          'The same pattern over a different chord is a different song. Keep '
+          'the count out loud while you play - the hand learns the words.',
+        ),
+        Hear([
+          SoundAction(
+            'Hear all down-strokes',
+            () => playStrumPattern(strumMidis, [0, beat, 2 * beat, 3 * beat]),
+          ),
+          SoundAction(
+            'Hear steady eighth notes',
+            () => playStrumPattern(strumMidis, [
+              0,
+              -0.5 * beat,
+              beat,
+              -1.5 * beat,
+              2 * beat,
+              -2.5 * beat,
+              3 * beat,
+              -3.5 * beat,
+            ]),
+          ),
+          SoundAction(
+            'Hear the classic pattern',
+            () => playStrumPattern(strumMidis, [
+              0,
+              beat,
+              -1.5 * beat,
+              -2.5 * beat,
+              3 * beat,
+              -3.5 * beat,
+            ]),
+          ),
+        ]),
         OpenSection('Practise the shapes in CHORDS / SCALES', onOpenChords),
+        OpenSection('See the notes on the neck', onOpenNeck),
         OpenSection('Check yourself in the quiz', onOpenQuiz),
       ],
     ),
@@ -393,104 +487,20 @@ List<Lesson> learnLessons({
         ]),
       ],
     ),
-    Lesson.reading(
-      title: 'What are strumming patterns?',
-      blurb: 'Down-strokes on the beats, up-strokes in between.',
-      icon: Icons.waves,
-      blocks: [
-        Prose(
-          'A pattern says which strokes land on which count. Down-strokes '
-          'usually take the beats, up-strokes the "and" between them. Leave '
-          'a stroke out and keep the hand moving: the missing strums are what '
-          'make a groove breathe.',
-        ),
-        FactTable(
-          columns: const [
-            'Count',
-            '1',
-            'and',
-            '2',
-            'and',
-            '3',
-            'and',
-            '4',
-            'and',
-          ],
-          rows: const [
-            ['All down', 'D', '-', 'D', '-', 'D', '-', 'D', '-'],
-            ['Steady eighths', 'D', 'U', 'D', 'U', 'D', 'U', 'D', 'U'],
-            ['The classic', 'D', '-', 'D', 'U', '-', 'U', 'D', 'U'],
-            ['Folk swing', 'D', '-', 'U', 'U', 'D', '-', 'U', ''],
-          ],
-        ),
-        Prose(
-          'The same pattern over a different chord is a different song. Keep '
-          'the count out loud while you play - the hand learns the words.',
-        ),
-        Hear([
-          SoundAction(
-            'Hear all down-strokes',
-            () => playStrumPattern(strumMidis, [0, beat, 2 * beat, 3 * beat]),
-          ),
-          SoundAction(
-            'Hear steady eighth notes',
-            () => playStrumPattern(strumMidis, [
-              0,
-              -0.5 * beat,
-              beat,
-              -1.5 * beat,
-              2 * beat,
-              -2.5 * beat,
-              3 * beat,
-              -3.5 * beat,
-            ]),
-          ),
-          SoundAction(
-            'Hear the classic pattern',
-            () => playStrumPattern(strumMidis, [
-              0,
-              beat,
-              -1.5 * beat,
-              -2.5 * beat,
-              3 * beat,
-              -3.5 * beat,
-            ]),
-          ),
-        ]),
-      ],
-    ),
-    Lesson.reading(
-      title: 'What are arpeggios?',
-      blurb: 'The same chord, but one note after another.',
-      icon: Icons.account_tree,
-      blocks: [
-        Prose(
-          'Strummed, the notes of a chord hit at almost the same instant. '
-          'Played one at a time they form an arpeggio, and suddenly the same '
-          'chord sounds like a melody.',
-        ),
-        const Points([
-          'Fingerstyle: thumb takes the bass, other fingers take the words.',
-          'Travis picking alternates a bass note on 1 and 3 with the middle '
-              'strings on 2 and 4.',
-          'Any chord can be picked slowly to find out what it is made of.',
-        ]),
-        Hear([
-          SoundAction(
-            'Hear C strummed',
-            () => playChord(c.soundingMidis(open)),
-          ),
-          SoundAction(
-            'Hear C as an arpeggio',
-            () => playRun(c.soundingMidis(open)),
-          ),
-          SoundAction(
-            'Hear a bass-and-strings pattern',
-            () => playRun(const [40, 59, 55, 52, 45, 59, 52, 55]),
-          ),
-        ]),
-        OpenSection('See the notes on the neck', onOpenNeck),
-      ],
+    // Last, because it is the page you read once you know what the others are
+    // for: the plan that names each of them in order.
+    Lesson.interactive(
+      title: 'I want to become a guitarist from scratch, what do I do?',
+      blurb: 'The four things to work on, in order, with the page for each.',
+      icon: Icons.flag_outlined,
+      body: (context) => RoadmapScreen(
+        onOpenChords: onOpenChords,
+        onOpenNeck: onOpenNeck,
+        onOpenQuiz: onOpenQuiz,
+        onOpenEarTraining: onOpenEarTraining,
+        onOpenMetronome: onOpenMetronome,
+        onOpenLesson: onOpenLesson,
+      ),
     ),
   ];
 }

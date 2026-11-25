@@ -1,13 +1,19 @@
+import 'dart:io' show File;
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:projet_ecole/app_shell.dart';
+import 'package:projet_ecole/audio/click_samples.dart';
 import 'package:projet_ecole/audio/click_voice.dart';
 import 'package:projet_ecole/audio/pluck_clip.dart';
 import 'package:projet_ecole/chords/chords_screen.dart';
+import 'package:projet_ecole/drum/drum_machine_screen.dart';
+import 'package:projet_ecole/drum/drum_patterns.dart';
 import 'package:projet_ecole/learn/learn_screen.dart';
+import 'package:projet_ecole/learn/lessons.dart';
 import 'package:projet_ecole/main.dart';
 import 'package:projet_ecole/metronome/metronome_screen.dart';
 import 'package:projet_ecole/models/chords.dart';
@@ -16,7 +22,9 @@ import 'package:projet_ecole/neck/neck_screen.dart';
 import 'package:projet_ecole/quiz/ear_training_data.dart';
 import 'package:projet_ecole/quiz/ear_training_screen.dart';
 import 'package:projet_ecole/quiz/quiz_data.dart';
+import 'package:projet_ecole/quiz/quiz_level.dart';
 import 'package:projet_ecole/quiz/quiz_screen.dart';
+import 'package:projet_ecole/roadmap/roadmap_screen.dart';
 import 'package:projet_ecole/start/start_screen.dart';
 import 'package:projet_ecole/theory/theory_screen.dart';
 import 'package:projet_ecole/tuner/pitch_detector.dart';
@@ -25,6 +33,7 @@ import 'package:projet_ecole/widgets/chord_diagram.dart';
 import 'package:projet_ecole/widgets/option_button.dart';
 import 'package:projet_ecole/widgets/settings_fab.dart';
 import 'package:projet_ecole/widgets/theme_fab.dart';
+import 'package:projet_ecole/widgets/wood_logo.dart';
 
 /// Every section stays mounted inside the shell's IndexedStack, so text from a
 /// hidden section is still in the tree. Scope finders to the screen.
@@ -372,7 +381,10 @@ void main() {
     ) async {
       await pumpApp(tester);
 
-      expect(find.text('Guitar in a Nut'), findsOneWidget);
+      // The brand plate is the logo itself, not a note icon and not a
+      // headline that repeats it.
+      expect(find.byType(WoodLogo), findsOneWidget);
+      expect(find.text('Guitar in a Nut'), findsNothing);
       expect(find.text('Are you a complete beginner?'), findsOneWidget);
 
       await tester.tap(find.text('Yes, teach me the basics first'));
@@ -435,6 +447,65 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(inScreen(TunerScreen, find.text('Start')), findsOneWidget);
+    });
+
+    testWidgets('the from-scratch plan lives in LEARN and walks into the '
+        'pages it names', (tester) async {
+      await openSection(tester, 'LEARN');
+
+      // The banner on top of the list, not a tab of its own.
+      expect(inScreen(LearnScreen, find.text('START HERE')), findsOneWidget);
+      expect(inScreen(LearnScreen, find.text('Open the plan')), findsOneWidget);
+      await scrollIn(
+        tester,
+        LearnScreen,
+        find.text('I want to become a guitarist from scratch, what do I do?'),
+      );
+      await tester.tap(
+        inScreen(
+          LearnScreen,
+          find.text('I want to become a guitarist from scratch, what do I do?'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        inScreen(RoadmapScreen, find.text('Four or five chord shapes')),
+        findsOneWidget,
+      );
+
+      // A lesson link lands on the merged chord page, strumming included.
+      await tester.tap(inScreen(RoadmapScreen, find.text('What is a chord?')));
+      await tester.pumpAndSettle();
+      await scrollIn(tester, LearnScreen, find.text('Strumming patterns'));
+      expect(
+        inScreen(LearnScreen, find.text('Strumming patterns')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('the rhythm step opens the metronome', (tester) async {
+      await openSection(tester, 'LEARN');
+      await scrollIn(
+        tester,
+        LearnScreen,
+        find.text('I want to become a guitarist from scratch, what do I do?'),
+      );
+      await tester.tap(
+        inScreen(
+          LearnScreen,
+          find.text('I want to become a guitarist from scratch, what do I do?'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await scrollIn(tester, RoadmapScreen, find.text('Open the metronome'));
+      await tester.tap(
+        inScreen(RoadmapScreen, find.text('Open the metronome')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(inScreen(MetronomeScreen, find.text('90')), findsOneWidget);
     });
   });
 
@@ -719,6 +790,78 @@ void main() {
       expect(inScreen(QuizScreen, find.text('Score: 0')), findsOneWidget);
     });
 
+    testWidgets('the level decides how many questions there are to ask', (
+      tester,
+    ) async {
+      await openQuiz(tester);
+
+      String poolLine() => tester
+          .widget<Text>(
+            inScreen(QuizScreen, find.textContaining('The app builds')),
+          )
+          .data!;
+
+      expect(poolLine(), contains('${quizPoolSizeFor(QuizLevel.medium)}'));
+
+      await tester.tap(inScreen(QuizScreen, find.text('Easy')));
+      await tester.pumpAndSettle();
+      expect(
+        poolLine(),
+        contains('${quizPoolSizeFor(QuizLevel.easy)} questions at this level'),
+      );
+
+      await tester.tap(inScreen(QuizScreen, find.text('Expert')));
+      await tester.pumpAndSettle();
+      expect(poolLine(), contains('${quizPoolSizeFor(QuizLevel.expert)}'));
+      expect(
+        inScreen(QuizScreen, find.textContaining('No options to fall back on')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('expert swaps the four options for a typed answer', (
+      tester,
+    ) async {
+      await openQuiz(tester);
+
+      await tester.tap(inScreen(QuizScreen, find.text('Expert')));
+      await tester.pumpAndSettle();
+      await tester.tap(inScreen(QuizScreen, find.text('5')));
+      await tester.pumpAndSettle();
+      await tester.tap(inScreen(QuizScreen, find.text('Draw 5 questions')));
+      await tester.pumpAndSettle();
+
+      expect(inScreen(QuizScreen, find.byType(OptionButton)), findsNothing);
+      final field = inScreen(QuizScreen, find.byKey(const Key('typed-answer')));
+      expect(field, findsOneWidget);
+      expect(inScreen(QuizScreen, find.text('Expert')), findsOneWidget);
+
+      await tester.enterText(field, 'a sentence nobody types');
+      await tester.tap(inScreen(QuizScreen, find.text('Check that answer')));
+      await tester.pumpAndSettle();
+
+      expect(
+        inScreen(QuizScreen, find.textContaining('Answer:')),
+        findsOneWidget,
+      );
+      expect(
+        inScreen(QuizScreen, find.textContaining('You wrote')),
+        findsOneWidget,
+      );
+      expect(inScreen(QuizScreen, find.text('Score: 0')), findsOneWidget);
+      expect(tester.widget<TextField>(field).enabled, isFalse);
+
+      await tester.tap(inScreen(QuizScreen, find.text('Next question')));
+      await tester.pumpAndSettle();
+
+      expect(
+        inScreen(QuizScreen, find.text('Question 2 of 5')),
+        findsOneWidget,
+      );
+      expect(tester.widget<TextField>(field).controller!.text, isEmpty);
+      expect(tester.widget<TextField>(field).enabled, isTrue);
+    });
+
     testWidgets('the right option scores and moves on', (tester) async {
       await openQuiz(tester);
       await tester.tap(inScreen(QuizScreen, find.text('Draw 10 questions')));
@@ -832,6 +975,45 @@ void main() {
       };
       expect(draws.length, greaterThan(4));
     });
+
+    test('every level draws only what it is allowed to ask about', () {
+      expect(quizPoolSizeFor(QuizLevel.hard), quizPool.length);
+      expect(
+        quizPoolSizeFor(QuizLevel.easy),
+        lessThan(quizPoolSizeFor(QuizLevel.medium)),
+      );
+      expect(
+        quizPoolSizeFor(QuizLevel.expert),
+        lessThan(quizPoolSizeFor(QuizLevel.hard)),
+      );
+
+      for (final level in QuizLevel.values) {
+        final round = quizRound(count: 10, seed: 11, level: level);
+        expect(round, hasLength(10), reason: level.name);
+        for (final question in round) {
+          expect(
+            question.tier,
+            lessThanOrEqualTo(level.topTier),
+            reason: '${level.name} - ${question.prompt}',
+          );
+          final answer = question.options[question.answerIndex];
+          if (level.isTyped) {
+            expect(isTypeable(answer), isTrue, reason: question.prompt);
+          }
+        }
+      }
+    });
+
+    test('a typed answer is forgiven for case, octave and spelling', () {
+      expect(typedAnswerMatches('c', 'C'), isTrue);
+      expect(typedAnswerMatches(' C4 ', 'C'), isTrue);
+      expect(typedAnswerMatches('c sharp', 'C#'), isTrue);
+      expect(typedAnswerMatches('C#', 'Db'), isFalse);
+      expect(typedAnswerMatches('', 'Am7'), isFalse);
+      expect(typedAnswerMatches('am7', 'Am7'), isTrue);
+      expect(typedAnswerMatches('minor 3rd', 'Minor 3rd'), isTrue);
+      expect(typedAnswerMatches('3rd', 'Minor 3rd'), isFalse);
+    });
   });
 
   group('scales and learn', () {
@@ -906,6 +1088,25 @@ void main() {
       expect(find.text('How do I tune?'), findsOneWidget);
       expect(find.text('How many notes are there?'), findsOneWidget);
     });
+
+    test('the from-scratch plan is the last lesson of LEARN', () {
+      final lessons = learnLessons(
+        tuning: tunings.first,
+        onOpenTuner: () {},
+        onOpenChords: () {},
+        onOpenNeck: () {},
+        onOpenQuiz: () {},
+        onOpenEarTraining: () {},
+        onOpenMetronome: () {},
+        onOpenLesson: (_) {},
+      );
+
+      expect(roadmapLessonIndex, lessons.length - 1);
+      expect(
+        lessons[roadmapLessonIndex].title,
+        'I want to become a guitarist from scratch, what do I do?',
+      );
+    });
   });
 
   group('ear training and theme', () {
@@ -922,19 +1123,26 @@ void main() {
       ]) {
         expect(inScreen(EarTrainingScreen, find.text(label)), findsOneWidget);
       }
+      // Every round states the length that was picked.
       expect(
-        inScreen(EarTrainingScreen, find.textContaining('sounds,')),
+        inScreen(EarTrainingScreen, find.textContaining('10 sounds')),
         findsNWidgets(4),
       );
+      // The difficulty and the length are picked once and apply to all four
+      // rounds.
+      for (final one in QuizLevel.values) {
+        expect(
+          inScreen(EarTrainingScreen, find.text(one.label)),
+          findsOneWidget,
+          reason: one.name,
+        );
+      }
 
       await tester.tap(inScreen(EarTrainingScreen, find.text('All in one')));
       await tester.pumpAndSettle();
 
       expect(
-        inScreen(
-          EarTrainingScreen,
-          find.text('Sound 1 of ${earRoundLength(EarMode.everything)}'),
-        ),
+        inScreen(EarTrainingScreen, find.text('Sound 1 of 10')),
         findsOneWidget,
       );
 
@@ -950,12 +1158,115 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        inScreen(
-          EarTrainingScreen,
-          find.text('Sound 2 of ${earRoundLength(EarMode.everything)}'),
-        ),
+        inScreen(EarTrainingScreen, find.text('Sound 2 of 10')),
         findsOneWidget,
       );
+    });
+
+    testWidgets('a round can be longer than the six open strings', (
+      tester,
+    ) async {
+      await openSection(tester, 'EAR TRAINING');
+
+      await tester.tap(inScreen(EarTrainingScreen, find.text('20')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        inScreen(EarTrainingScreen, find.text('Open strings only')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        inScreen(EarTrainingScreen, find.text('Sound 1 of 20')),
+        findsOneWidget,
+      );
+
+      // Walk the whole round: every sound has four options to choose from and
+      // the last one ends on the score page.
+      for (var i = 1; i <= 20; i++) {
+        expect(
+          inScreen(EarTrainingScreen, find.text('Sound $i of 20')),
+          findsOneWidget,
+          reason: '$i',
+        );
+        await tapAnswer(tester, EarTrainingScreen);
+        await tester.tap(
+          inScreen(
+            EarTrainingScreen,
+            find.text(i == 20 ? 'See my score' : 'Next sound'),
+          ),
+        );
+        await tester.pumpAndSettle();
+      }
+
+      expect(inScreen(EarTrainingScreen, find.text('20 / 20')), findsOneWidget);
+    });
+
+    testWidgets('expert asks for a typed answer instead of four options', (
+      tester,
+    ) async {
+      await openSection(tester, 'EAR TRAINING');
+
+      await tester.tap(inScreen(EarTrainingScreen, find.text('Expert')));
+      await tester.pumpAndSettle();
+      await tester.tap(inScreen(EarTrainingScreen, find.text('5')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        inScreen(EarTrainingScreen, find.text('Open strings only')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        inScreen(EarTrainingScreen, find.byType(OptionButton)),
+        findsNothing,
+      );
+      expect(
+        inScreen(EarTrainingScreen, find.byKey(const Key('typed-answer'))),
+        findsOneWidget,
+      );
+      expect(
+        inScreen(EarTrainingScreen, find.text('Check that answer')),
+        findsOneWidget,
+      );
+
+      // At this level the open string round only asks for A, D or G, so one
+      // of those three is always right and the other two reveal the answer.
+      final notes = inScreen(
+        EarTrainingScreen,
+        find.byKey(const Key('typed-answer')),
+      );
+      await tester.tap(notes);
+      await tester.enterText(notes, 'A');
+      await tester.pumpAndSettle();
+      await tester.tap(
+        inScreen(EarTrainingScreen, find.text('Check that answer')),
+      );
+      await tester.pumpAndSettle();
+
+      final correct = inScreen(
+        EarTrainingScreen,
+        find.textContaining('Correct'),
+      ).evaluate().isNotEmpty;
+      if (correct) {
+        expect(
+          inScreen(EarTrainingScreen, find.text('Score: 1')),
+          findsOneWidget,
+        );
+      } else {
+        expect(
+          inScreen(EarTrainingScreen, find.textContaining('Answer:')),
+          findsOneWidget,
+        );
+        expect(
+          inScreen(EarTrainingScreen, find.textContaining('You wrote')),
+          findsOneWidget,
+        );
+        expect(
+          inScreen(EarTrainingScreen, find.text('Score: 0')),
+          findsOneWidget,
+        );
+      }
+      expect(tester.widget<TextField>(notes).controller!.text, 'A');
+      expect(tester.widget<TextField>(notes).enabled, isFalse);
     });
 
     test('each generated round asks about four options of its own kind', () {
@@ -1025,8 +1336,14 @@ void main() {
       }
 
       // The pools are big enough for a fresh order every time.
-      expect(earPoolSize(EarMode.chords), greaterThanOrEqualTo(30));
-      expect(earPoolSize(EarMode.neckNotes), greaterThanOrEqualTo(60));
+      expect(
+        earPoolSize(EarMode.chords, level: QuizLevel.hard),
+        greaterThanOrEqualTo(30),
+      );
+      expect(
+        earPoolSize(EarMode.neckNotes, level: QuizLevel.hard),
+        greaterThanOrEqualTo(60),
+      );
       String answers(EarMode mode, int seed) => earQuestionsFor(
         mode,
         seed: seed,
@@ -1037,6 +1354,60 @@ void main() {
         expect(answers(mode, 7), answers(mode, 7));
         // And a different seed lands on different sounds.
         expect(answers(mode, 7), isNot(answers(mode, 1234)), reason: mode.name);
+      }
+    });
+
+    test('the difficulty levels narrow what the ear can be asked about', () {
+      for (final mode in EarMode.values) {
+        final easy = earPoolSize(mode, level: QuizLevel.easy);
+        final medium = earPoolSize(mode, level: QuizLevel.medium);
+        final hard = earPoolSize(mode, level: QuizLevel.hard);
+        expect(easy, greaterThan(0), reason: mode.name);
+        expect(easy, lessThanOrEqualTo(medium), reason: mode.name);
+        expect(medium, lessThanOrEqualTo(hard), reason: mode.name);
+      }
+
+      final easyRound = earQuestionsFor(
+        EarMode.everything,
+        seed: 9,
+        count: 20,
+        level: QuizLevel.easy,
+      );
+      expect(easyRound, hasLength(20));
+      for (final question in easyRound) {
+        expect(question.tier, 0, reason: question.answer);
+      }
+
+      // Expert reads the whole pool but keeps only the answers worth typing.
+      final typed = earQuestionsFor(
+        EarMode.everything,
+        seed: 4,
+        count: 12,
+        level: QuizLevel.expert,
+      );
+      expect(typed, hasLength(12));
+      for (final question in typed) {
+        expect(isTypeable(question.answer), isTrue, reason: question.answer);
+      }
+    });
+
+    test('a long round repeats sounds but never twice in a row', () {
+      final strings = earQuestionsFor(EarMode.openStrings, seed: 3, count: 20);
+      expect(strings, hasLength(20));
+      for (var i = 1; i < strings.length; i++) {
+        expect(identical(strings[i], strings[i - 1]), isFalse, reason: '$i');
+      }
+      expect(strings.map((q) => q.answer).toSet().length, greaterThan(1));
+
+      final chords = earQuestionsFor(
+        EarMode.chords,
+        seed: 5,
+        count: 40,
+        level: QuizLevel.hard,
+      );
+      expect(chords, hasLength(40));
+      for (var i = 1; i < chords.length; i++) {
+        expect(identical(chords[i], chords[i - 1]), isFalse, reason: '$i');
       }
     });
 
@@ -1306,7 +1677,7 @@ void main() {
       expect(
         inScreen(
           MetronomeScreen,
-          find.text('Bright and long, the one that disappears least.'),
+          find.text('A ride cymbal: the ping rings on past the beat.'),
         ),
         findsOneWidget,
       );
@@ -1314,6 +1685,47 @@ void main() {
         inScreen(MetronomeScreen, find.text('Hear this sound')),
         findsOneWidget,
       );
+    });
+
+    testWidgets('beat one is stressed until the player says otherwise', (
+      tester,
+    ) async {
+      await openSection(tester, 'METRONOME');
+      final stress = inScreen(MetronomeScreen, find.byType(Switch));
+
+      expect(tester.widget<Switch>(stress).value, isTrue);
+      expect(
+        inScreen(
+          MetronomeScreen,
+          find.text(
+            'Beat one sounds louder and a touch higher, so the bar counts '
+            'itself.',
+          ),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(stress);
+      await tester.pumpAndSettle();
+
+      expect(tester.widget<Switch>(stress).value, isFalse);
+      expect(
+        inScreen(MetronomeScreen, find.text('Every beat sounds the same.')),
+        findsOneWidget,
+      );
+
+      // The count itself does not care what beat one sounds like.
+      await tester.tap(inScreen(MetronomeScreen, find.text('1 bar')));
+      await tester.pumpAndSettle();
+      await tester.tap(inScreen(MetronomeScreen, find.text('Start')));
+      await tester.pump();
+
+      expect(inScreen(MetronomeScreen, find.text('Stop')), findsOneWidget);
+
+      await tester.pump(const Duration(milliseconds: 3000));
+      await tester.pumpAndSettle();
+
+      expect(inScreen(MetronomeScreen, find.text('Start')), findsOneWidget);
     });
 
     testWidgets('start counts the beats and stop silences the click', (
@@ -1340,6 +1752,214 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(inScreen(MetronomeScreen, find.text('Start')), findsOneWidget);
+    });
+  });
+
+  group('drum machine', () {
+    Finder cell(ClickVoice lane, int step) =>
+        inScreen(DrumMachineScreen, find.byKey(Key('drum-${lane.name}-$step')));
+
+    Color cellColor(WidgetTester tester, ClickVoice lane, int step) {
+      final box = tester
+          .widget<AnimatedContainer>(
+            find.descendant(
+              of: cell(lane, step),
+              matching: find.byType(AnimatedContainer),
+            ),
+          )
+          .decoration;
+      return (box as BoxDecoration).color!;
+    }
+
+    /// How many cells across the whole grid are lit up as a hit.
+    int litCells(WidgetTester tester, Color primary) {
+      var lit = 0;
+      for (final lane in drumLanes) {
+        for (var step = 0; step < drumSteps; step++) {
+          if (cellColor(tester, lane, step) == primary) lit++;
+        }
+      }
+      return lit;
+    }
+
+    testWidgets('the rail opens a grid of every sample', (tester) async {
+      await openSection(tester, 'DRUM MACHINE');
+      final dim = Theme.of(tester.element(find.byType(DrumMachineScreen)))
+          .colorScheme
+          .surfaceContainerHighest;
+
+      for (final lane in drumLanes) {
+        expect(
+          inScreen(DrumMachineScreen, find.text(lane.label)),
+          findsOneWidget,
+          reason: '${lane.name} should head a lane',
+        );
+      }
+
+      // Eight lanes, sixteen steps, and the beat every fourth cell. The tom
+      // lane is empty in the pattern the page ships with, so its cells show
+      // the grid itself.
+      expect(cell(ClickVoice.kick, 0), findsOneWidget);
+      expect(cell(ClickVoice.stick, drumSteps - 1), findsOneWidget);
+      expect(cellColor(tester, ClickVoice.tom, 0), dim);
+      expect(cellColor(tester, ClickVoice.tom, 1), dim.withValues(alpha: 0.45));
+    });
+
+    testWidgets('a tapped cell stays lit until you tap it again', (
+      tester,
+    ) async {
+      await openSection(tester, 'DRUM MACHINE');
+      final scheme = Theme.of(tester.element(find.byType(DrumMachineScreen)))
+          .colorScheme;
+
+      // Two kicks, two snares and four cymbals come with the page, so the
+      // first Play is never silence.
+      final shipped = litCells(tester, scheme.primary);
+      expect(shipped, 8);
+
+      await tester.tap(cell(ClickVoice.snare, 6));
+      await tester.pumpAndSettle();
+
+      expect(cellColor(tester, ClickVoice.snare, 6), scheme.primary);
+      expect(litCells(tester, scheme.primary), shipped + 1);
+
+      await tester.tap(cell(ClickVoice.snare, 6));
+      await tester.pumpAndSettle();
+
+      expect(litCells(tester, scheme.primary), shipped);
+    });
+
+    testWidgets('a preset fills the grid and Clear empties it again', (
+      tester,
+    ) async {
+      await openSection(tester, 'DRUM MACHINE');
+      final scheme = Theme.of(tester.element(find.byType(DrumMachineScreen)))
+          .colorScheme;
+
+      // The rock beat is two kicks, two snares and four cymbals.
+      await tester.tap(inScreen(DrumMachineScreen, find.text('Rock beat')));
+      await tester.pumpAndSettle();
+
+      expect(litCells(tester, scheme.primary), 8);
+      expect(cellColor(tester, ClickVoice.kick, 10), scheme.primary);
+      expect(cellColor(tester, ClickVoice.snare, 4), scheme.primary);
+      expect(cellColor(tester, ClickVoice.cymbal, 8), scheme.primary);
+      expect(cellColor(tester, ClickVoice.tom, 4), isNot(scheme.primary));
+
+      // Loading another pattern replaces it instead of piling on top.
+      await tester.tap(
+        inScreen(DrumMachineScreen, find.text('Four on the floor')),
+      );
+      await tester.pumpAndSettle();
+
+      // Four kicks, two claps, four bells, and the rock beat gone.
+      expect(litCells(tester, scheme.primary), 10);
+      expect(cellColor(tester, ClickVoice.clap, 12), scheme.primary);
+      expect(cellColor(tester, ClickVoice.snare, 4), isNot(scheme.primary));
+
+      await tester.tap(inScreen(DrumMachineScreen, find.text('Clear')));
+      await tester.pumpAndSettle();
+
+      expect(litCells(tester, scheme.primary), 0);
+    });
+
+    testWidgets('play walks the playhead and stop leaves the grid alone', (
+      tester,
+    ) async {
+      await openSection(tester, 'DRUM MACHINE');
+      final scheme = Theme.of(tester.element(find.byType(DrumMachineScreen)))
+          .colorScheme;
+      final dim = scheme.surfaceContainerHighest;
+
+      await tester.tap(inScreen(DrumMachineScreen, find.byTooltip('Slower')));
+      await tester.pumpAndSettle();
+
+      // 95 beats a minute, so one of the sixteen steps lasts about 158 ms.
+      expect(inScreen(DrumMachineScreen, find.text('95')), findsOneWidget);
+
+      await tester.tap(inScreen(DrumMachineScreen, find.text('Play')));
+      await tester.pump();
+
+      expect(inScreen(DrumMachineScreen, find.text('Stop')), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 120));
+
+      expect(
+        cellColor(tester, ClickVoice.tom, 0),
+        scheme.primary.withValues(alpha: 0.22),
+      );
+
+      await tester.pump(const Duration(milliseconds: 160));
+
+      expect(
+        cellColor(tester, ClickVoice.tom, 1),
+        scheme.primary.withValues(alpha: 0.22),
+      );
+      expect(cellColor(tester, ClickVoice.tom, 0), dim);
+
+      await tester.tap(inScreen(DrumMachineScreen, find.text('Stop')));
+      await tester.pumpAndSettle();
+
+      expect(inScreen(DrumMachineScreen, find.text('Play')), findsOneWidget);
+      // Stopping parks the playhead but leaves the written pattern alone.
+      expect(litCells(tester, scheme.primary), 8);
+      expect(cellColor(tester, ClickVoice.tom, 1), dim.withValues(alpha: 0.45));
+    });
+
+    testWidgets('a phone gets the steps in a sideways scroll', (tester) async {
+      // The screen on its own, at thumb size: the shell's own phone behaviour
+      // is covered by the navigation tests.
+      await tester.binding.setSurfaceSize(const Size(420, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: appTheme,
+          home: const Scaffold(body: DrumMachineScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final scheme = Theme.of(tester.element(find.byType(DrumMachineScreen)))
+          .colorScheme;
+      final steps = find.byKey(const Key('drum-steps'));
+      final last = cell(ClickVoice.tom, drumSteps - 1);
+      final label = inScreen(DrumMachineScreen, find.text('Kick'));
+
+      // The tempo card keeps both of its buttons, even here.
+      expect(
+        tester
+            .getTopRight(inScreen(DrumMachineScreen, find.byTooltip('Faster')))
+            .dx,
+        lessThan(420),
+      );
+
+      expect(
+        tester.widget<SingleChildScrollView>(steps).scrollDirection,
+        Axis.horizontal,
+      );
+
+      // Sixteen steps cannot share 420 px, so the far end starts off screen.
+      expect(
+        tester.getTopLeft(last).dx,
+        greaterThan(tester.getTopRight(steps).dx),
+      );
+
+      final labelLeft = tester.getTopLeft(label);
+      Scrollable.ensureVisible(tester.element(last));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.getTopLeft(last).dx,
+        lessThan(tester.getTopRight(steps).dx),
+      );
+      // The lane names keep their column; only the steps scroll sideways. The
+      // eleven lanes do push the grid past the bottom of a phone, so the page
+      // can still slide vertically here.
+      expect(tester.getTopLeft(label).dx, labelLeft.dx);
+
+      await tester.tap(last);
+      await tester.pumpAndSettle();
+
+      expect(cellColor(tester, ClickVoice.tom, drumSteps - 1), scheme.primary);
     });
   });
 
@@ -1396,6 +2016,69 @@ void main() {
       expect(String.fromCharCodes(wav.sublist(8, 12)), 'WAVE');
       expect(String.fromCharCodes(wav.sublist(36, 40)), 'data');
       expect(wav.length, 44 + samples.length * 2);
+    });
+  });
+
+  group('recorded clicks', () {
+    // Only the web layer plays these files, so the tests read the bytes
+    // behind the paths instead.
+    test('every sampled voice ships a short, audible pcm file', () {
+      expect(clickSamplePaths.keys, isNot(contains(ClickVoice.stick)));
+      expect(clickSamplePaths.length, ClickVoice.values.length - 1);
+
+      final lengths = <ClickVoice, double>{};
+      for (final entry in clickSamplePaths.entries) {
+        final bytes = File(entry.value).readAsBytesSync();
+        final wav = ByteData.sublistView(bytes);
+
+        expect(
+          String.fromCharCodes(bytes.sublist(0, 4)),
+          'RIFF',
+          reason: entry.key.label,
+        );
+        expect(
+          wav.getUint16(20, Endian.little),
+          1,
+          reason: '${entry.value}: pcm',
+        );
+        expect(
+          wav.getUint16(22, Endian.little),
+          1,
+          reason: '${entry.value}: mono',
+        );
+        expect(wav.getUint32(24, Endian.little), 44100, reason: entry.value);
+        expect(wav.getUint16(34, Endian.little), 16, reason: entry.value);
+        expect(bytes.length, lessThan(150 * 1024), reason: entry.value);
+
+        // Tight enough that one beat does not hide the next, and the ride is
+        // the one voice allowed to keep ringing.
+        lengths[entry.key] = (bytes.length - 44) / 2 / 44100;
+        expect(lengths[entry.key], lessThan(1.2), reason: entry.value);
+
+        var peak = 0;
+        for (var i = 44; i + 1 < bytes.length; i += 2) {
+          peak = math.max(peak, wav.getInt16(i, Endian.little).abs());
+        }
+        expect(peak, greaterThan(8000), reason: '${entry.value}: silent');
+      }
+      expect(
+        lengths[ClickVoice.cymbal],
+        greaterThan(lengths[ClickVoice.snare]!),
+      );
+      // Both cymbals outlast the drum cuts; the bell is the shorter of the
+      // two, which is what makes it read as a ping and not a wash.
+      expect(lengths[ClickVoice.bell], greaterThan(lengths[ClickVoice.snare]!));
+      expect(lengths[ClickVoice.bell], lessThan(lengths[ClickVoice.cymbal]!));
+      expect(lengths[ClickVoice.kick], greaterThan(lengths[ClickVoice.clap]!));
+    });
+
+    test('the pubspec carries the folder the loader reads', () {
+      final pubspec = File('pubspec.yaml').readAsStringSync();
+
+      expect(pubspec, contains('- assets/clicks/'));
+      for (final path in clickSamplePaths.values) {
+        expect(path, startsWith('assets/clicks/'));
+      }
     });
   });
 }

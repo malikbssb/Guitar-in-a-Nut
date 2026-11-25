@@ -1,13 +1,20 @@
 import 'package:flutter/material.dart';
 
 import 'app_shell.dart';
+import 'audio/click_engine.dart';
+import 'audio/click_samples.dart';
 import 'l10n/strings.dart';
 import 'start/start_screen.dart';
 import 'theory/theory_screen.dart';
 import 'widgets/settings_fab.dart';
 import 'widgets/theme_fab.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // The recorded clicks are read and decoded here, so the first beat of a
+  // session never waits on a file.
+  await loadClickSamples();
+  await prepareClickEngine();
   runApp(const GuitarInANutApp());
 }
 

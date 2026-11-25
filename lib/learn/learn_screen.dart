@@ -17,6 +17,8 @@ class LearnScreen extends StatefulWidget {
   final VoidCallback onOpenChords;
   final VoidCallback onOpenNeck;
   final VoidCallback onOpenQuiz;
+  final VoidCallback onOpenEarTraining;
+  final VoidCallback onOpenMetronome;
 
   const LearnScreen({
     super.key,
@@ -26,6 +28,8 @@ class LearnScreen extends StatefulWidget {
     required this.onOpenChords,
     required this.onOpenNeck,
     required this.onOpenQuiz,
+    required this.onOpenEarTraining,
+    required this.onOpenMetronome,
   });
 
   @override
@@ -55,6 +59,11 @@ class _LearnScreenState extends State<LearnScreen> {
     onOpenChords: widget.onOpenChords,
     onOpenNeck: widget.onOpenNeck,
     onOpenQuiz: widget.onOpenQuiz,
+    onOpenEarTraining: widget.onOpenEarTraining,
+    onOpenMetronome: widget.onOpenMetronome,
+    // The from-scratch plan links to lessons by number, and inside this tab
+    // that is just opening the page.
+    onOpenLesson: (index) => setState(() => _open = index),
   );
 
   @override
@@ -63,6 +72,7 @@ class _LearnScreenState extends State<LearnScreen> {
     final index = _open;
 
     if (index == null || index >= lessons.length) {
+      final plan = lessons[roadmapLessonIndex];
       return SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
@@ -73,17 +83,31 @@ class _LearnScreenState extends State<LearnScreen> {
                 '{n} short pages, each one an answer to a question '
                 'beginners actually ask. Every page has something to listen '
                 'to.',
-                {'n': '${lessons.length}'},
+                {'n': '${lessons.length - 1}'},
               ),
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 16),
+            // The plan is the one page worth opening first, so it is not
+            // allowed to look like card nine of nine.
+            _PlanCard(
+              lesson: plan,
+              onTap: () => setState(() => _open = roadmapLessonIndex),
+            ),
+            const SizedBox(height: 22),
+            Text(
+              L.t(context, 'The pages, in order'),
+              style: Theme.of(context).textTheme.titleSmall
+                  ?.copyWith(color: Theme.of(context).colorScheme.primary),
+            ),
+            const SizedBox(height: 10),
             for (var i = 0; i < lessons.length; i++)
-              _LessonCard(
-                lesson: lessons[i],
-                number: i + 1,
-                onTap: () => setState(() => _open = i),
-              ),
+              if (i != roadmapLessonIndex)
+                _LessonCard(
+                  lesson: lessons[i],
+                  number: i + 1,
+                  onTap: () => setState(() => _open = i),
+                ),
           ],
         ),
       );
@@ -121,6 +145,70 @@ class _LearnScreenState extends State<LearnScreen> {
                 : _LessonBlocks(blocks: lesson.blocks),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// The banner that opens the from-scratch plan: bigger, framed and lit in the
+/// accent colour, so the one page a beginner should start with is the first
+/// thing they see on the tab.
+class _PlanCard extends StatelessWidget {
+  final Lesson lesson;
+  final VoidCallback onTap;
+
+  const _PlanCard({required this.lesson, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Card(
+      margin: EdgeInsets.zero,
+      color: scheme.primaryContainer.withValues(alpha: 0.28),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(26),
+        side: BorderSide(
+          color: scheme.primary.withValues(alpha: 0.7),
+          width: 2,
+        ),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(26),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(lesson.icon, color: scheme.primary, size: 26),
+                  const SizedBox(width: 10),
+                  Text(
+                    L.t(context, 'Start here').toUpperCase(),
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: scheme.primary,
+                      letterSpacing: 2,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(lesson.title, style: theme.textTheme.titleLarge),
+              const SizedBox(height: 8),
+              Text(lesson.blurb, style: theme.textTheme.bodyMedium),
+              const SizedBox(height: 14),
+              FilledButton.icon(
+                onPressed: onTap,
+                icon: const Icon(Icons.arrow_forward),
+                label: Text(L.t(context, 'Open the plan')),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -180,6 +268,35 @@ class _LessonBlocks extends StatelessWidget {
             Prose() => Padding(
               padding: const EdgeInsets.only(bottom: 14),
               child: Text(block.text, style: theme.textTheme.bodyMedium),
+            ),
+            SubHeading() => Padding(
+              padding: const EdgeInsets.fromLTRB(0, 10, 0, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Divider(
+                      color: theme.colorScheme.onSurface.withValues(
+                        alpha: 0.14,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    block.text,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Divider(
+                      color: theme.colorScheme.onSurface.withValues(
+                        alpha: 0.14,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
             Points() => Padding(
               padding: const EdgeInsets.only(bottom: 14),

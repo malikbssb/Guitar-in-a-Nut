@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 
 import 'app_shell.dart';
+import 'audio/click_engine.dart';
+import 'audio/click_samples.dart';
 import 'chords/chords_screen.dart';
+import 'drum/drum_machine_screen.dart';
 import 'l10n/strings.dart';
 import 'learn/learn_screen.dart';
+import 'learn/lessons.dart';
 import 'main.dart';
 import 'metronome/metronome_screen.dart';
 import 'models/chords.dart';
@@ -12,6 +16,7 @@ import 'models/scales.dart';
 import 'neck/neck_screen.dart';
 import 'quiz/ear_training_screen.dart';
 import 'quiz/quiz_screen.dart';
+import 'start/start_screen.dart';
 import 'theory/theory_screen.dart';
 import 'widgets/settings_sheet.dart';
 
@@ -19,7 +24,11 @@ import 'widgets/settings_sheet.dart';
 ///
 /// The fragment picks the page, and an optional language in front of it:
 /// `#/neck`, `#/fr/neck`, `#/fr/settings`.
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Same startup as the real app, so a click here is the click the user hears.
+  await loadClickSamples();
+  await prepareClickEngine();
   runApp(const _PreviewApp());
 }
 
@@ -82,6 +91,17 @@ class _PreviewAppState extends State<_PreviewApp> {
       );
     }
 
+    // The entry page brings its own scaffold and buttons, like the shell.
+    if (page == 'start') {
+      return StartScreen(
+        lightMode: _lightMode,
+        onToggleTheme: () => setState(() => _lightMode = !_lightMode),
+        onLang: (lang) => setState(() => _lang = lang),
+        onBeginner: () {},
+        onReady: () {},
+      );
+    }
+
     final tuning = tunings.first;
     void noop() {}
 
@@ -92,6 +112,8 @@ class _PreviewAppState extends State<_PreviewApp> {
       onOpenChords: noop,
       onOpenNeck: noop,
       onOpenQuiz: noop,
+      onOpenEarTraining: noop,
+      onOpenMetronome: noop,
     );
 
     Widget neck({bool highlight = false, bool extended = false}) => NeckScreen(
@@ -108,8 +130,10 @@ class _PreviewAppState extends State<_PreviewApp> {
     final screen = switch (page) {
       'learn' => lesson(null),
       'learn-chord' => lesson(1),
+      'learn-scale' => lesson(2),
       'learn-rhythm' => lesson(4),
       'learn-tabs' => lesson(6),
+      'learn-metronome' => lesson(7),
       'chords' => ChordsScreen(
         tuning: tuning,
         selected: commonChords.last,
@@ -122,7 +146,9 @@ class _PreviewAppState extends State<_PreviewApp> {
       'ear' => const EarTrainingScreen(),
       'theory' => TheoryScreen(onContinue: () {}),
       'quiz' => const QuizScreen(),
+      'roadmap' => lesson(roadmapLessonIndex),
       'metronome' => const MetronomeScreen(),
+      'drum' => const DrumMachineScreen(),
       'settings' => SettingsSheet(
         onLang: (lang) => setState(() => _lang = lang),
         onToggleTheme: () => setState(() => _lightMode = !_lightMode),

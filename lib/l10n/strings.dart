@@ -56,6 +56,11 @@ const _fr = <String, String>{
           'questions stay in English.':
       'Seule l\'interface est traduite. Les leçons, les histoires d\'accords '
       'et les questions du quiz restent en anglais.',
+  'The French side is a machine pass nobody has proofread. Wordings can be '
+          'off, so English stays the recommended language.':
+      'Le français est une passe automatique que personne n\'a relue. Les '
+      'formulations peuvent sonner bizarre, l\'anglais reste la langue '
+      'recommandée.',
 
   // One line under the top bar, per section.
   'Enable your microphone, pluck a string and get to tuning!':
@@ -66,7 +71,9 @@ const _fr = <String, String>{
       'Toutes les notes du manche, à un tap.',
   'Short pages that answer the questions beginners ask.':
       'Des pages courtes qui répondent aux questions des débutants.',
-  'Ten questions drawn from a pool of {n}. New draw every round.': 'Dix questions tirées d\'un bassin de {n}. Nouveau tirage à chaque série.',
+  'Questions drawn from a pool of {n}. Pick the level and the length.':
+      'Des questions tirées d\'un bassin de {n}. Choisis le niveau et la '
+      'longueur.',
   'No names on screen. Listen, guess, then read why.':
       'Aucun nom à l\'écran. Écoute, devine, puis lis pourquoi.',
 
@@ -247,16 +254,18 @@ const _fr = <String, String>{
       '{n} pages courtes, chacune une réponse à une question que les '
       'débutants posent vraiment. Chaque page a quelque chose à écouter.',
   'All lessons': 'Toutes les leçons',
+  'Start here': 'Commencez ici',
+  'The pages, in order': 'Les pages, dans l\'ordre',
+  'Open the plan': 'Ouvrir le plan',
 
   // Written quiz.
   'A different quiz every time': 'Un quiz différent à chaque fois',
-  'The app builds {n} questions from the diagrams, the tunings and the key '
-          'groups on these pages, then draws a fresh set. Nothing repeats in '
-          'the same order, and the four options get shuffled too.':
-      'L\'app fabrique {n} questions à partir des diagrammes, des accordages '
-      'et des tonalités de ces pages, puis tire un nouvel ensemble. Rien ne '
-      'se répète dans le même ordre, et les quatre options sont mélangées '
-      'aussi.',
+  'The app builds {n} questions at this level from the diagrams, the tunings '
+          'and the key groups on these pages, then draws a fresh set. Nothing '
+          'repeats in the same order.':
+      'L\'app fabrique {n} questions à ce niveau à partir des diagrammes, des '
+      'accordages et des tonalités de ces pages, puis tire un nouvel '
+      'ensemble. Rien ne se répète dans le même ordre.',
   'How many questions?': 'Combien de questions ?',
   'Draw {n} questions': 'Tirer {n} questions',
   'Strong. You could tune someone else now.':
@@ -302,7 +311,31 @@ const _fr = <String, String>{
       'Accords, notes, intervalles, gammes et mesures, tirés de tous les '
       'bassins.',
   '{n} sounds, drawn fresh from {m}': '{n} sons, tirés d\'un lot de {m}',
-  '{n} sounds, in a random order': '{n} sons, dans un ordre aléatoire',
+  '{n} sounds from {m}, so they come back':
+      '{n} sons pour un lot de {m}, donc ils reviennent',
+  'Nothing at this level': 'Rien à ce niveau',
+  'How many sounds?': 'Combien de sons ?',
+
+  // Difficulty levels, shared by both quizzes.
+  'How hard?': 'Niveau ?',
+  'Easy': 'Facile',
+  'Medium': 'Moyen',
+  'Hard': 'Difficile',
+  'Expert': 'Expert',
+  'Open strings, the first chord shapes and the notes you already met.':
+      'Cordes à vide, les premières formes d\'accord et les notes que tu as '
+      'déjà croisées.',
+  'Intervals, tunings, keys and the neck up to the 12th fret.':
+      'Intervalles, accordages, tonalités et le manche jusqu\'à la 12e case.',
+  'The whole site, including the borrowed and extended shapes.':
+      'Tout le site, y compris les formes empruntées et enrichies.',
+  'No options to fall back on. Type what you hear or read.':
+      'Plus d\'options sur lesquelles s\'appuyer. Écris ce que tu entends ou '
+      'ce que tu lis.',
+  'Type your answer': 'Écris ta réponse',
+  'a note, a chord, an interval': 'une note, un accord, un intervalle',
+  'Check that answer': 'Vérifier',
+  'You wrote {a}': 'Tu as écrit {a}',
 
   // Small tags under the ear-training header.
   'chord': 'accord',
@@ -346,8 +379,11 @@ const _fr = <String, String>{
   'Slower': 'Plus lent',
   'Faster': 'Plus rapide',
   'Beats per bar': 'Temps par mesure',
-  'The first beat of the bar sounds louder.':
-      'Le premier temps de la mesure sonne plus fort.',
+  'Stress the first beat': 'Souligner le premier temps',
+  'Beat one sounds louder and a touch higher, so the bar counts itself.':
+      'Le premier temps sonne plus fort et un peu plus aigu : la mesure se '
+      'compte toute seule.',
+  'Every beat sounds the same.': 'Tous les temps sonnent pareil.',
   'How many bars?': 'Combien de mesures ?',
   'Forever': 'Sans fin',
   '{n} bars': '{n} mesures',
@@ -357,16 +393,105 @@ const _fr = <String, String>{
   'Stick': 'Bois',
   'A short wood block tick, the classic metronome sound.':
       'Un tick de bois court, le clic de métronome classique.',
+  'Kick': 'Grosse caisse',
+  'A low thump you feel more than hear, soft on the ear.':
+      'Un coup grave qu\'on sent plus qu\'on entend, doux à l\'oreille.',
   'Snare': 'Caisse claire',
-  'A noise burst with the wires rattling under it.':
-      'Une bouffée de bruit avec les câbles qui vibrent dessous.',
+  'A real snare hit, dry and short enough to sit on the beat.':
+      'Une vraie caisse claire, assez sèche et courte pour poser le temps.',
+  'Tom': 'Tom',
+  'A round, deep drum note with a pitch you can hum back.':
+      'Une note de tambour ronde et profonde, assez pitchée pour la chanter.',
   'Cymbal': 'Cymbale',
-  'Bright and long, the one that disappears least.':
-      'Clair et long, celui qui disparaît le moins.',
+  'A ride cymbal: the ping rings on past the beat.':
+      'Une cymbale ride : le ping continue bien après le temps.',
+  'Bell': 'Cloche',
+  'The bell of a cymbal: a thin, bright ping that cuts through.':
+      'La cloche de la cymbale : un ping fin et clair qui perce.',
   'Clap': 'Clap',
-  'Three hand claps, warm enough to keep time with.':
-      'Trois claps de mains, assez chauds pour tenir la mesure.',
+  'One hand clap, warm enough to keep time with.':
+      'Un seul clap de mains, assez chaud pour tenir la mesure.',
   'Cowbell': 'Cowbell',
   'Two pitches at once, the sharpest of the set.':
       'Deux hauteurs à la fois, le plus mordant du lot.',
+  'Closed Hi-hat': 'Charley fermé',
+  'The hats snapped together: a tight hiss that fills the gap between beats.': 'Les charleys claquent ensemble : un sifflement serré qui remplit le vide entre les temps.',
+  'Semi-closed Hi-hat': 'Charley mi-fermé',
+  'The tightest hat of the three, almost all attack and no ring at all.': 'Le plus serré des trois : presque uniquement l\'attaque, sans tintement.',
+  'Open Hi-hat': 'Charley ouvert',
+  'The hats left apart: a long, hissy wash that rings past the beat.': 'Les charleys restent écartés : une longue trainée sifflante qui résonne après le temps.',
+
+  // Drum machine.
+  'DRUM MACHINE': 'BOÎTE À RYTHMES',
+  'Drum machine': 'Boîte à rythmes',
+  'Build a bar of drums, one step at a time.':
+      'Construis une mesure de batterie, pas à pas.',
+  'Tap a cell to put a drum on that step.':
+      'Touche une case pour poser une batterie sur ce pas.',
+  'Start from': 'Partir de',
+  'Clear': 'Vider',
+  'Play': 'Lancer',
+  'Four cells to a beat, sixteen to a bar.':
+      'Quatre cases par temps, seize par mesure.',
+  'Rock beat': 'Battement rock',
+  'Four on the floor': 'Quatre temps au sol',
+  'Funk': 'Funk',
+
+  // The from-scratch lesson inside LEARN.
+  'Four things, and they come in this order. You do not need all of them at '
+          'once: each one has a page in this app, and the link under every '
+          'step takes you there.':
+      'Quatre choses, dans cet ordre. Pas besoin de tout en même temps : '
+      'chacune a sa page dans l\'appli, et le lien sous chaque étape y '
+      'conduit.',
+  'Four or five chord shapes': 'Quatre ou cinq formes d\'accord',
+  'C, G, D, A, E, Am and Em cover thousands of songs. Learn the shapes, then '
+          'learn to move between two of them without stopping. A chord is '
+          'only useful once your hand finds it without looking.':
+      'C, G, D, A, E, Am et Em couvrent des milliers de chansons. Apprends '
+      'les formes, puis apprends à passer de l\'une à l\'autre sans t\'arrêter. '
+      'Un accord ne sert à rien tant que ta main ne le trouve sans regarder.',
+  'Open the chord shapes': 'Ouvrir les formes d\'accord',
+  'What is a chord?': 'C\'est quoi un accord ?',
+  'Finger independence and dexterity': 'Indépendance et agilité des doigts',
+  'The fingers do not obey yet, and that is normal. Slow, clean repetition is '
+          'the only training: one note per string, each note heard clearly, '
+          'hands relaxed. Speed is a side effect of accuracy, never the other '
+          'way round.':
+      'Les doigts n\'obéissent pas encore, c\'est normal. La répétition lente '
+      'et propre est le seul entraînement : une note par corde, chaque note '
+      'bien entendue, mains détendues. La vitesse est un effet de la '
+      'précision, jamais l\'inverse.',
+  'Walk the notes on the neck': 'Parcourir les notes du manche',
+  'How to read tabs': 'Comment lire une tablature',
+  'A few basic scales': 'Quelques gammes de base',
+  'Minor pentatonic first, then the major scale. A scale is one shape you can '
+          'slide anywhere on the neck, and it is what solos, riffs and '
+          'single-note lines are cut from.':
+      'La pentatonique mineure d\'abord, puis la gamme majeure. Une gamme '
+      'est une forme qu\'on peut glisser partout sur le manche, et c\'est là '
+      'qu\'on découpe les solos, les riffs et les lignes de notes seules.',
+  'Hear every scale': 'Écouter toutes les gammes',
+  'What is a scale?': 'C\'est quoi une gamme ?',
+  'Light up a scale on the neck': 'Éclairer une gamme sur le manche',
+  'Rhythm, with a metronome': 'Le rythme, avec un métronome',
+  'Strumming patterns, down-strokes on the beats and a count out loud. Then '
+          'play against a click: it is the only honest way to hear whether '
+          'you are actually together with the beat.':
+      'Des motifs de grattage, des coups vers le bas sur les temps et un '
+      'comptage à voix haute. Puis jouer avec un clic : c\'est le seul moyen '
+      'honnête d\'entendre si tu es vraiment collé au tempo.',
+  'Strumming and arpeggios': 'Grattage et arpèges',
+  'What are time signatures?': 'C\'est quoi une mesure ?',
+  'How to use a metronome': 'Comment utiliser un métronome',
+  'Open the metronome': 'Ouvrir le métronome',
+  'Then check what stuck': 'Puis vérifier ce qui est resté',
+  'The written quiz asks about shapes, notes and tunings. The ear training '
+          'asks about sounds. Start on Easy, and move up when the answers '
+          'stop surprising you.':
+      'Le quiz écrit interroge sur les formes, les notes et les accordages. '
+      'L\'entraînement de l\'oreille interroge sur les sons. Commence en '
+      'Facile, et monte quand les réponses ne te surprennent plus.',
+  'Take the quiz': 'Faire le quiz',
+  'Train your ears': 'Entraîner tes oreilles',
 };

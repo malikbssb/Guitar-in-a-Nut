@@ -1,14 +1,13 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
+import '../audio/click_engine.dart';
 import '../audio/click_voice.dart';
-import '../audio/string_audio.dart';
 import '../l10n/strings.dart';
 
 /// The metronome: a tempo, a bar length, and whichever click the player
-/// hears best. Beats are scheduled one by one rather than rendered as one
-/// long clip, so changing the tempo mid-run takes effect on the next tick.
+/// hears best. The beats are booked by [click_engine], which runs them on the
+/// audio clock so changing the tempo takes effect on the next beat without
+/// dragging the one after it.
 class MetronomeScreen extends StatefulWidget {
   const MetronomeScreen({super.key});
 
@@ -28,58 +27,48 @@ class _MetronomeScreenState extends State<MetronomeScreen> {
   int _beatsPerBar = 4;
   int? _bars;
   ClickVoice _voice = ClickVoice.stick;
+  bool _stress = true;
 
-  Timer? _timer;
   bool _running = false;
-
-  /// Beats played since Start, used to stop after the bars the player asked
-  /// for.
-  int _played = 0;
 
   /// Beat inside the bar that last sounded, for the dots.
   int _current = -1;
 
-  int get _totalBeats => _bars == null ? 0 : _bars! * _beatsPerBar;
-
-  /// One beat at the current tempo.
-  Duration get _step => Duration(microseconds: (60e6 / _bpm).round());
-
   @override
   void dispose() {
-    _timer?.cancel();
+    stopClickLoop();
     super.dispose();
   }
 
   void _start() {
-    _timer?.cancel();
     setState(() {
       _running = true;
-      _played = 0;
       _current = -1;
     });
-    _tick();
-    _timer = Timer.periodic(_step, (_) => _tick());
+    startClickLoop(
+      bpm: _bpm.toDouble(),
+      beatsPerBar: _beatsPerBar,
+      totalBeats: _bars == null ? null : _bars! * _beatsPerBar,
+      voice: _voice,
+      stressFirstBeat: _stress,
+      onBeat: (beat) {
+        if (mounted) setState(() => _current = beat % _beatsPerBar);
+      },
+      onEnd: _finished,
+    );
   }
 
-  void _tick() {
-    if (!_running) return;
-    if (_bars != null && _played >= _totalBeats) {
-      _stop();
-      return;
-    }
-    final insideBar = _played % _beatsPerBar;
-    playClick(_voice, accent: insideBar == 0);
-    if (mounted) {
-      setState(() {
-        _current = insideBar;
-        _played++;
-      });
-    }
+  /// The engine ran out of bars, so the button goes back to Start.
+  void _finished() {
+    if (!mounted) return;
+    setState(() {
+      _running = false;
+      _current = -1;
+    });
   }
 
   void _stop() {
-    _timer?.cancel();
-    _timer = null;
+    stopClickLoop();
     if (mounted) {
       setState(() {
         _running = false;
@@ -92,12 +81,15 @@ class _MetronomeScreenState extends State<MetronomeScreen> {
     final next = bpm.clamp(_minBpm, _maxBpm);
     if (next == _bpm) return;
     setState(() => _bpm = next);
-    // A running timer keeps its old spacing, so restart the clock instead of
-    // waiting for the next tick to land late or early.
-    if (_running) {
-      _timer?.cancel();
-      _timer = Timer.periodic(_step, (_) => _tick());
-    }
+    setClickTempo(next.toDouble());
+  }
+
+  /// The bar length and the run are counted from beat one, so the only honest
+  /// way to change them mid-run is to start the count again.
+  void _restartIfRunning() {
+    if (!_running) return;
+    stopClickLoop();
+    _start();
   }
 
   @override
@@ -173,6 +165,7 @@ class _MetronomeScreenState extends State<MetronomeScreen> {
                 _BeatDots(
                   beats: _beatsPerBar,
                   current: _current,
+                  stress: _stress,
                   color: scheme.primary,
                   dim: scheme.surfaceContainerHighest,
                 ),
@@ -202,16 +195,45 @@ class _MetronomeScreenState extends State<MetronomeScreen> {
                 ChoiceChip(
                   label: Text('$beats'),
                   selected: _beatsPerBar == beats,
-                  onSelected: (_) => setState(() {
-                    _beatsPerBar = beats;
-                    _current = -1;
-                    _played = 0;
-                  }),
+                  onSelected: (_) {
+                    setState(() {
+                      _beatsPerBar = beats;
+                      _current = -1;
+                    });
+                    _restartIfRunning();
+                  },
                 ),
             ],
           ),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  L.t(context, 'Stress the first beat'),
+                  style: theme.textTheme.titleSmall,
+                ),
+                const SizedBox(width: 14),
+                Switch(
+                  value: _stress,
+                  onChanged: (on) {
+                    setState(() => _stress = on);
+                    setClickStress(on);
+                  },
+                ),
+              ],
+            ),
+          ),
           Text(
-            L.t(context, 'The first beat of the bar sounds louder.'),
+            L.t(
+              context,
+              _stress
+                  ? 'Beat one sounds louder and a touch higher, so the bar '
+                        'counts itself.'
+                  : 'Every beat sounds the same.',
+            ),
             style: theme.textTheme.bodySmall,
           ),
           const SizedBox(height: 18),
@@ -234,7 +256,10 @@ class _MetronomeScreenState extends State<MetronomeScreen> {
                           }),
                   ),
                   selected: _bars == bars,
-                  onSelected: (_) => setState(() => _bars = bars),
+                  onSelected: (_) {
+                    setState(() => _bars = bars);
+                    _restartIfRunning();
+                  },
                 ),
             ],
           ),
@@ -251,7 +276,8 @@ class _MetronomeScreenState extends State<MetronomeScreen> {
                   selected: _voice == voice,
                   onSelected: (_) {
                     setState(() => _voice = voice);
-                    playClick(voice, accent: true);
+                    setClickVoice(voice);
+                    previewClick(voice);
                   },
                 ),
             ],
@@ -267,7 +293,7 @@ class _MetronomeScreenState extends State<MetronomeScreen> {
               ),
               const SizedBox(width: 12),
               OutlinedButton.icon(
-                onPressed: () => playClick(_voice, accent: true),
+                onPressed: () => previewClick(_voice),
                 icon: const Icon(Icons.volume_up),
                 label: Text(L.t(context, 'Hear this sound')),
               ),
@@ -279,16 +305,19 @@ class _MetronomeScreenState extends State<MetronomeScreen> {
   }
 }
 
-/// One light per beat, the one that just sounded lit up.
+/// One light per beat, the one that just sounded lit up. With the stress on,
+/// beat one is the bigger dot, the same way it is the louder hit.
 class _BeatDots extends StatelessWidget {
   final int beats;
   final int current;
+  final bool stress;
   final Color color;
   final Color dim;
 
   const _BeatDots({
     required this.beats,
     required this.current,
+    required this.stress,
     required this.color,
     required this.dim,
   });
@@ -302,8 +331,8 @@ class _BeatDots extends StatelessWidget {
             padding: const EdgeInsets.only(right: 10),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 90),
-              width: beat == 0 ? 26 : 20,
-              height: beat == 0 ? 26 : 20,
+              width: beat == 0 && stress ? 26 : 20,
+              height: beat == 0 && stress ? 26 : 20,
               decoration: BoxDecoration(
                 color: beat == current ? color : dim,
                 shape: BoxShape.circle,

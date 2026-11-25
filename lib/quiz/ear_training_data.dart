@@ -6,6 +6,7 @@ import '../audio/string_audio.dart';
 import '../models/chords.dart';
 import '../models/notes.dart';
 import '../models/scales.dart';
+import 'quiz_level.dart';
 
 /// One sound, played on tap, with the names it could have been.
 class EarQuestion {
@@ -16,6 +17,10 @@ class EarQuestion {
   final int answerIndex;
   final String explanation;
 
+  /// 0 for the sounds a beginner is expected to know, 1 for the open position
+  /// and 2 for everything past it. See [QuizLevel.topTier].
+  final int tier;
+
   const EarQuestion({
     required this.prompt,
     required this.kind,
@@ -23,15 +28,18 @@ class EarQuestion {
     required this.options,
     required this.answerIndex,
     required this.explanation,
+    this.tier = 1,
   });
+
+  String get answer => options[answerIndex];
 }
 
 /// The demos are always in E standard so the same clip means the same thing
 /// whatever the visitor has selected in the top right.
 const _open = <int>[40, 45, 50, 55, 59, 64];
 
-/// How many sounds one round plays. The narrow rounds are capped by their own
-/// pool: six strings, eight chords, ten neck notes.
+/// How many sounds a round plays when the player does not choose. Rounds can
+/// be longer than this; a pool that runs out simply repeats.
 int earRoundLength(EarMode mode) => switch (mode) {
   EarMode.openStrings => 6,
   EarMode.chords => 8,
@@ -66,57 +74,89 @@ enum EarMode {
 }
 
 /// A fresh round for [mode]: the pools are shuffled, so no two rounds play in
-/// the same order or ask about the same sounds.
-List<EarQuestion> earQuestionsFor(EarMode mode, {int? seed}) {
+/// the same order or ask about the same sounds. A [count] longer than the
+/// pool repeats sounds, never twice in a row.
+List<EarQuestion> earQuestionsFor(
+  EarMode mode, {
+  int? seed,
+  int? count,
+  QuizLevel level = QuizLevel.medium,
+}) {
   final random = math.Random(seed);
-  final count = earRoundLength(mode);
+  final asked = count ?? earRoundLength(mode);
+  final pools = _poolsFor(
+    mode,
+    random,
+    level,
+  ).where((p) => p.isNotEmpty).toList();
+  if (pools.isEmpty) return const [];
+  if (pools.length == 1) return _draw(pools.single, asked, random);
+  return _mix(pools, asked, random);
+}
+
+/// The pools behind one mode, already cut down to what [level] allows.
+List<List<EarQuestion>> _poolsFor(
+  EarMode mode,
+  math.Random random,
+  QuizLevel level,
+) {
+  List<EarQuestion> keep(List<EarQuestion> pool) => _filter(pool, level);
 
   return switch (mode) {
-    EarMode.openStrings => _draw(_openStringPool(random), count, random),
-    EarMode.chords => _draw(_chordPool(random), count, random),
-    EarMode.neckNotes => _draw(_neckPool(random), count, random),
-    EarMode.everything => _mix(
-      [
-        _openStringPool(random),
-        _chordPool(random),
-        _neckPool(random),
-        _qualityPool(random),
-        _intervalPool(random),
-        _scalePool(random),
-        _rhythmPool(random),
-        _texturePool(random),
-      ],
-      count,
-      random,
-    ),
+    EarMode.openStrings => [keep(_openStringPool(random))],
+    EarMode.chords => [keep(_chordPool(random))],
+    EarMode.neckNotes => [keep(_neckPool(random))],
+    EarMode.everything => [
+      keep(_openStringPool(random)),
+      keep(_chordPool(random)),
+      keep(_neckPool(random)),
+      keep(_qualityPool(random)),
+      keep(_intervalPool(random)),
+      keep(_scalePool(random)),
+      keep(_rhythmPool(random)),
+      keep(_texturePool(random)),
+    ],
   };
 }
 
 /// How many sounds each mode can draw from, for the intro text.
-int earPoolSize(EarMode mode) {
+int earPoolSize(EarMode mode, {QuizLevel level = QuizLevel.medium}) {
   final random = math.Random(3);
-  return switch (mode) {
-    EarMode.openStrings => _openStringPool(random).length,
-    EarMode.chords => _chordPool(random).length,
-    EarMode.neckNotes => _neckPool(random).length,
-    EarMode.everything =>
-      _openStringPool(random).length +
-          _chordPool(random).length +
-          _neckPool(random).length +
-          _qualityPool(random).length +
-          _intervalPool(random).length +
-          _scalePool(random).length +
-          _rhythmPool(random).length +
-          _texturePool(random).length,
-  };
+  var total = 0;
+  for (final pool in _poolsFor(mode, random, level)) {
+    total += pool.length;
+  }
+  return total;
 }
 
+List<EarQuestion> _filter(List<EarQuestion> pool, QuizLevel level) => [
+  for (final question in pool)
+    if (question.tier <= level.topTier &&
+        (!level.isTyped || isTypeable(question.answer)))
+      question,
+];
+
 List<EarQuestion> _draw(List<EarQuestion> pool, int count, math.Random random) {
-  final shuffled = List<EarQuestion>.of(pool)..shuffle(random);
-  return shuffled.take(math.min(count, shuffled.length)).toList();
+  if (pool.isEmpty) return const [];
+  final queue = List<EarQuestion>.of(pool)..shuffle(random);
+  final round = <EarQuestion>[];
+  while (round.length < count) {
+    if (queue.isEmpty) {
+      // The six open strings can still carry twenty questions: refill and
+      // move the sound the player just heard away from the next draw.
+      queue.addAll(pool);
+      queue.shuffle(random);
+      if (pool.length > 1 && identical(queue.last, round.last)) {
+        queue.insert(0, queue.removeLast());
+      }
+    }
+    round.add(queue.removeLast());
+  }
+  return round;
 }
 
 /// Round-robin over the pools so a mixed round never ends up all chords.
+/// Pools that run dry are refilled, which is what makes a long round legal.
 List<EarQuestion> _mix(
   List<List<EarQuestion>> pools,
   int count,
@@ -124,17 +164,20 @@ List<EarQuestion> _mix(
 ) {
   final buckets = [
     for (final pool in pools)
-      if (pool.isNotEmpty) List<EarQuestion>.of(pool)..shuffle(random),
+      if (pool.isNotEmpty)
+        (pool: pool, drawn: List<EarQuestion>.of(pool)..shuffle(random)),
   ];
+  if (buckets.isEmpty) return const [];
   final round = <EarQuestion>[];
   while (round.length < count) {
-    final before = round.length;
     for (final bucket in buckets) {
       if (round.length == count) break;
-      if (bucket.isEmpty) continue;
-      round.add(bucket.removeLast());
+      if (bucket.drawn.isEmpty) {
+        bucket.drawn.addAll(bucket.pool);
+        bucket.drawn.shuffle(random);
+      }
+      round.add(bucket.drawn.removeLast());
     }
-    if (round.length == before) break;
   }
   return round..shuffle(random);
 }
@@ -185,6 +228,7 @@ List<EarQuestion> _openStringPool(math.Random random) {
               '${PitchNames.withOctave(midi)}, '
               '${PitchNames.frequencyOf(midi).toStringAsFixed(1)} Hz - the '
               'open ${stringNumbers[index]} string. $where',
+          tier: 0,
         );
       }(),
   ];
@@ -207,6 +251,7 @@ List<EarQuestion> _chordPool(math.Random random) {
           explanation:
               '${chord.name} spells out ${chord.spelledNotes()} on '
               '${chord.stringCount} strings. ${chord.blurb}',
+          tier: chordTier(chord),
         );
       }(),
   ];
@@ -233,6 +278,7 @@ List<EarQuestion> _qualityPool(math.Random random) {
               '$label - and it is $label because ${chord.name} spells '
               '${chord.spelledNotes()}, built on '
               '${PitchNames.of(chord.soundingMidis(_open).first)}.',
+          tier: label == 'Major' || label == 'Minor' ? 0 : 1,
         );
       }(),
   ].nonNulls.toList();
@@ -278,6 +324,11 @@ List<EarQuestion> _neckPool(math.Random random) {
                 'That was ${PitchNames.withOctave(midi)}: $answer at fret '
                 '$fret of the ${stringNumbers[string]} string. Find it on the '
                 'neck page to hear it again in place.',
+            tier: fret <= 3
+                ? 0
+                : fret <= 7
+                ? 1
+                : 2,
           );
         }(),
   ];
@@ -321,6 +372,7 @@ List<EarQuestion> _intervalPool(math.Random random) {
               '${PitchNames.of(root)} up ${intervalName(size)} to '
               '${PitchNames.of(root + size)}: $size frets apart on the same '
               'string, which is the easiest way to find it again.',
+          tier: size <= wholeStep ? 0 : 1,
         );
       }(),
       () {
@@ -338,6 +390,7 @@ List<EarQuestion> _intervalPool(math.Random random) {
               'Falling this time, ${intervalName(size)} from '
               '${PitchNames.of(root + size)} down to ${PitchNames.of(root)}. '
               'Direction changes the mood, not the distance.',
+          tier: size <= wholeStep ? 1 : 2,
         );
       }(),
     ],
@@ -354,7 +407,7 @@ List<EarQuestion> _scalePool(math.Random random) {
   ];
 
   return [
-    for (final scale in commonScales) ...[
+    for (final (place, scale) in commonScales.indexed) ...[
       () {
         final root = _open[2] + octave;
         final choice = _fourOptions(scale.name, names, random);
@@ -368,6 +421,7 @@ List<EarQuestion> _scalePool(math.Random random) {
           explanation:
               '${scale.name}, from ${PitchNames.withOctave(root)}: '
               '${scale.spelledFrom(root)}. ${scale.blurb}',
+          tier: place < 2 ? 1 : 2,
         );
       }(),
       for (final ascending in [true, false])
@@ -394,6 +448,7 @@ List<EarQuestion> _scalePool(math.Random random) {
                       '${PitchNames.withOctave(root + octave)} back to its '
                       'root. The same notes upward are what you practise '
                       'first.',
+            tier: 2,
           );
         }(),
     ],
@@ -433,6 +488,7 @@ List<EarQuestion> _rhythmPool(math.Random random) {
                 '6/8' => 'Two groups of three, which is why it swings.',
                 _ => 'ONE two, a march.',
               }}',
+          tier: 2,
         );
       }(),
     for (final bpm in const [60, 84, 112])
@@ -449,6 +505,7 @@ List<EarQuestion> _rhythmPool(math.Random random) {
           explanation:
               '$bpm beats a minute. 60 is one click per second; the faster it '
               'goes, the less time you have between strums.',
+          tier: 2,
         );
       }(),
   ];
@@ -479,6 +536,7 @@ List<EarQuestion> _texturePool(math.Random random) {
                 'which is why the chord round is harder than the note round.'
           : 'An arpeggio: the notes of $name arriving in a row, so you can '
                 'hear the shape inside the chord.',
+      tier: 2,
     );
   }
 

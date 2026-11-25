@@ -108,12 +108,43 @@ class PluckClip {
   static Float32List click(ClickVoice voice, {bool accent = false}) {
     final out = switch (voice) {
       ClickVoice.stick => _click(accent ? 1760 : 1180),
+      ClickVoice.kick => _drum(accent ? 58 : 52, 90, 22, 9, accent),
       ClickVoice.snare => _snare(accent),
+      ClickVoice.tom => _drum(accent ? 112 : 98, 55, 12, 7, accent),
       ClickVoice.cymbal => _cymbal(accent),
+      ClickVoice.bell => _bell(accent),
       ClickVoice.clap => _clap(accent),
       ClickVoice.cowbell => _cowbell(accent),
+      ClickVoice.hatClosed => _hat(accent, 0.12, 34, 91),
+      ClickVoice.hatSemi => _hat(accent, 0.07, 46, 97),
+      ClickVoice.hatOpen => _hat(accent, 0.4, 9, 93),
     };
     return _normalize(out);
+  }
+
+  /// Kick and tom: one sine that slides down while it dies away, which is
+  /// what a drum head does as the tension leaves it.
+  static Float32List _drum(
+    double root,
+    double drop,
+    double dropRate,
+    double decay,
+    bool accent,
+  ) {
+    final length = _samples(0.32);
+    final out = Float32List(length);
+    var phase = 0.0;
+    for (var i = 0; i < length; i++) {
+      final t = i / sampleRate;
+      phase +=
+          2 * math.pi * (root + drop * math.exp(-t * dropRate)) / sampleRate;
+      out[i] = math.sin(phase) * math.exp(-t * decay);
+    }
+    final attack = math.min(length, _samples(0.003));
+    for (var i = 0; i < attack; i++) {
+      out[i] *= i / attack;
+    }
+    return out;
   }
 
   static Float32List _noise(int length, int seed) {
@@ -163,6 +194,27 @@ class PluckClip {
     return out;
   }
 
+  /// The struck bell of a ride: two high partials and no wash, so the ping
+  /// stays thin enough to hear over string noise.
+  static Float32List _bell(bool accent) {
+    final length = _samples(0.36);
+    final out = Float32List(length);
+    const partials = [2637.0, 3520.0, 5137.0];
+    for (var i = 0; i < length; i++) {
+      final t = i / sampleRate;
+      var ping = 0.0;
+      for (var k = 0; k < partials.length; k++) {
+        ping += math.sin(2 * math.pi * partials[k] * t) / (k + 1);
+      }
+      out[i] = ping * math.exp(-t * 11);
+    }
+    final attack = math.min(length, _samples(0.002));
+    for (var i = 0; i < attack; i++) {
+      out[i] *= i / attack;
+    }
+    return out;
+  }
+
   /// Three slaps a few milliseconds apart, then a small room tail.
   static Float32List _clap(bool accent) {
     final length = _samples(0.4);
@@ -201,6 +253,35 @@ class PluckClip {
           square(math.sin(2 * math.pi * low * t)) +
           square(math.sin(2 * math.pi * high * t));
       out[i] = tone * envelope;
+    }
+    return out;
+  }
+
+  /// Two cymbals snapped together: bright noise, a short metallic ping, and a
+  /// length that stands in for how far apart the hats were left.
+  static Float32List _hat(bool accent, double seconds, double decay, int seed) {
+    final length = _samples(accent ? seconds * 1.15 : seconds);
+    final noise = _noise(length, seed);
+    final partials = [4093.0, 6231.0];
+    var previous = 0.0;
+    final out = Float32List(length);
+    for (var i = 0; i < length; i++) {
+      final t = i / sampleRate;
+      // Differencing takes out the rumble and leaves the hiss.
+      final hiss = noise[i] - previous;
+      previous = noise[i];
+      var ping = 0.0;
+      for (var k = 0; k < partials.length; k++) {
+        final hz = partials[k] * (accent ? 1.06 : 1.0);
+        ping += math.sin(2 * math.pi * hz * t) / (k + 1);
+      }
+      out[i] =
+          hiss * math.exp(-t * decay) +
+          ping * math.exp(-t * (decay + 6)) * 0.25;
+    }
+    final attack = math.min(length, _samples(0.001));
+    for (var i = 0; i < attack; i++) {
+      out[i] *= i / attack;
     }
     return out;
   }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../l10n/strings.dart';
 import '../widgets/settings_fab.dart';
 import '../widgets/theme_fab.dart';
+import '../widgets/wood_logo.dart';
 
 /// First screen: decides whether the visitor needs the theory page.
 class StartScreen extends StatelessWidget {
@@ -43,21 +44,8 @@ class StartScreen extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Icon(
-                          Icons.music_note,
-                          size: 64,
-                          color: theme.colorScheme.primary,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Guitar in a Nut',
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.displaySmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: theme.colorScheme.primary,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
+                        const WoodLogo(height: 84),
+                        const SizedBox(height: 18),
                         Text(
                           L.t(
                             context,
@@ -67,27 +55,51 @@ class StartScreen extends StatelessWidget {
                           textAlign: TextAlign.center,
                           style: theme.textTheme.bodyLarge,
                         ),
-                        const SizedBox(height: 36),
-                        Text(
-                          L.t(context, 'Are you a complete beginner?'),
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 16),
-                        FilledButton.icon(
-                          onPressed: onBeginner,
-                          icon: const Icon(Icons.school),
-                          label: Text(
-                            L.t(context, 'Yes, teach me the basics first'),
+                        const SizedBox(height: 32),
+                        Card(
+                          color: theme.colorScheme.surfaceContainer,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            side: BorderSide(
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.12,
+                              ),
+                            ),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Text(
+                                  L.t(context, 'Are you a complete beginner?'),
+                                  textAlign: TextAlign.center,
+                                  style: theme.textTheme.titleMedium,
+                                ),
+                                const SizedBox(height: 16),
+                                FilledButton.icon(
+                                  onPressed: onBeginner,
+                                  icon: const Icon(Icons.school),
+                                  label: Text(
+                                    L.t(
+                                      context,
+                                      'Yes, teach me the basics first',
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                OutlinedButton.icon(
+                                  onPressed: onReady,
+                                  icon: const Icon(Icons.tune),
+                                  label: Text(
+                                    L.t(context, 'No, take me to the tools'),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 10),
-                        OutlinedButton.icon(
-                          onPressed: onReady,
-                          icon: const Icon(Icons.tune),
-                          label: Text(L.t(context, 'No, take me to the tools')),
-                        ),
-                        const SizedBox(height: 28),
+                        const SizedBox(height: 22),
                         Text(
                           L.t(
                             context,

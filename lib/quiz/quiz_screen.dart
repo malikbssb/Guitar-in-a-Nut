@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import '../l10n/strings.dart';
 import '../widgets/chord_diagram.dart';
 import '../widgets/option_button.dart';
+import 'level_picker.dart';
 import 'quiz_data.dart';
+import 'quiz_level.dart';
+import 'typed_answer.dart';
 
 class QuizScreen extends StatefulWidget {
   const QuizScreen({super.key});
@@ -19,18 +22,39 @@ class _QuizScreenState extends State<QuizScreen> {
   List<Question> _questions = const [];
   bool _done = false;
   int _length = quizLength;
+  QuizLevel _level = QuizLevel.medium;
   int _index = 0;
   int _score = 0;
   int? _picked;
 
-  bool get _answered => _picked != null;
+  /// Expert rounds: what was typed, and whether it was right.
+  final _typed = TextEditingController();
+  String? _typedReply;
+  bool _typedRight = false;
+
+  @override
+  void dispose() {
+    _typed.dispose();
+    super.dispose();
+  }
+
+  Question get _question => _questions[_index];
+
+  bool get _isTyped => _level.isTyped;
+
+  bool get _answered => _isTyped ? _typedReply != null : _picked != null;
+
+  bool get _isRight =>
+      _isTyped ? _typedRight : _picked == _question.answerIndex;
 
   void _start() => setState(() {
-    _questions = quizRound(count: _length);
+    _questions = quizRound(count: _length, level: _level);
     _done = false;
     _index = 0;
     _score = 0;
     _picked = null;
+    _typedReply = null;
+    _typed.clear();
   });
 
   void _next() => setState(() {
@@ -40,7 +64,20 @@ class _QuizScreenState extends State<QuizScreen> {
       _index++;
     }
     _picked = null;
+    _typedReply = null;
+    _typed.clear();
   });
+
+  /// An empty box is not an answer, so the round waits for a real attempt.
+  void _checkTyped() {
+    if (_answered || _typed.text.trim().isEmpty) return;
+    final correct = typedAnswerMatches(_typed.text, _question.answer);
+    setState(() {
+      _typedReply = _typed.text;
+      _typedRight = correct;
+      if (correct) _score++;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -64,14 +101,19 @@ class _QuizScreenState extends State<QuizScreen> {
                 Text(
                   L.f(
                     context,
-                    'The app builds {n} questions from the diagrams, the '
-                    'tunings and the key groups on these pages, then draws a '
-                    'fresh set. Nothing repeats in the same order, and the '
-                    'four options get shuffled too.',
-                    {'n': '${quizPool.length}'},
+                    'The app builds {n} questions at this level from the '
+                    'diagrams, the tunings and the key groups on these pages, '
+                    'then draws a fresh set. Nothing repeats in the same '
+                    'order.',
+                    {'n': '${quizPoolSizeFor(_level)}'},
                   ),
                   style: theme.textTheme.bodyMedium,
                   textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                LevelPicker(
+                  level: _level,
+                  onChanged: (one) => setState(() => _level = one),
                 ),
                 const SizedBox(height: 20),
                 Text(
@@ -129,6 +171,11 @@ class _QuizScreenState extends State<QuizScreen> {
                   '$_score / ${_questions.length}',
                   style: theme.textTheme.displayMedium,
                 ),
+                const SizedBox(height: 4),
+                Text(
+                  L.t(context, _level.label),
+                  style: theme.textTheme.titleSmall,
+                ),
                 const SizedBox(height: 8),
                 Text(verdict, textAlign: TextAlign.center),
                 const SizedBox(height: 24),
@@ -167,6 +214,13 @@ class _QuizScreenState extends State<QuizScreen> {
               ),
               const SizedBox(width: 10),
               Text(
+                L.t(context, _level.label),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.tertiary,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
                 L.f(context, 'Score: {n}', {'n': '$_score'}),
                 style: theme.textTheme.labelLarge,
               ),
@@ -191,20 +245,27 @@ class _QuizScreenState extends State<QuizScreen> {
           const SizedBox(height: 20),
           Text(question.prompt, style: theme.textTheme.titleLarge),
           const SizedBox(height: 16),
-          for (var i = 0; i < question.options.length; i++)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: OptionButton(
-                text: question.options[i],
-                isAnswer: i == question.answerIndex,
-                isPicked: i == _picked,
-                revealed: _answered,
-                onTap: () => setState(() {
-                  if (_picked == null && i == question.answerIndex) _score++;
-                  _picked = i;
-                }),
+          if (_isTyped)
+            TypedAnswerField(
+              controller: _typed,
+              canType: !_answered,
+              onSubmit: _checkTyped,
+            )
+          else
+            for (var i = 0; i < question.options.length; i++)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: OptionButton(
+                  text: question.options[i],
+                  isAnswer: i == question.answerIndex,
+                  isPicked: i == _picked,
+                  revealed: _answered,
+                  onTap: () => setState(() {
+                    if (_picked == null && i == question.answerIndex) _score++;
+                    _picked = i;
+                  }),
+                ),
               ),
-            ),
           if (_answered) ...[
             Card(
               color: theme.colorScheme.surfaceContainerHighest,
@@ -214,7 +275,7 @@ class _QuizScreenState extends State<QuizScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _picked == question.answerIndex
+                      _isRight
                           ? L.t(context, 'Correct')
                           : L.f(context, 'Answer: {a}', {
                               'a': question.options[question.answerIndex],
@@ -222,6 +283,12 @@ class _QuizScreenState extends State<QuizScreen> {
                       style: theme.textTheme.titleSmall,
                     ),
                     const SizedBox(height: 4),
+                    if (_typedReply != null && !_isRight)
+                      Text(
+                        L.f(context, 'You wrote {a}', {
+                          'a': '“${_typedReply!.trim()}”',
+                        }),
+                      ),
                     Text(question.explanation),
                   ],
                 ),

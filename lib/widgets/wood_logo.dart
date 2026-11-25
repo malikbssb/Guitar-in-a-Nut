@@ -3,10 +3,11 @@ import 'package:flutter/material.dart';
 /// Walnut badge that doubles as the home button. The cream name plate is the
 /// nut itself: a bone strip with one V-slot per string along its top edge.
 class WoodLogo extends StatelessWidget {
-  final VoidCallback onTap;
+  /// Null on screens where the badge is a title, not a home button.
+  final VoidCallback? onTap;
   final double height;
 
-  const WoodLogo({super.key, required this.onTap, this.height = 64});
+  const WoodLogo({super.key, this.onTap, this.height = 64});
 
   static const double _boxWidth = 178;
 
